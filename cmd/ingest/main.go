@@ -1,65 +1,62 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 
-	"github.com/orvo-sh/orvo/internal/domain/models"
-	"github.com/orvo-sh/orvo/internal/domain/services/ingest"
+	httpin_integration "github.com/ggicci/httpin/integration"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
+	"github.com/lmittmann/tint"
+	"github.com/orvo-sh/orvo/internal/config"
+	"github.com/orvo-sh/orvo/internal/domain/services/ingestservice"
+	http_handler "github.com/orvo-sh/orvo/internal/http"
 	"github.com/orvo-sh/orvo/internal/infra/redis"
+	"github.com/orvo-sh/orvo/pkg/util"
 )
 
 func main() {
-	// Initialize Redis
-	redisConfig := redis.Config{
-		Address:  os.Getenv("REDIS_ADDRESS"),
-		Password: os.Getenv("REDIS_PASSWORD"),
-	}
-	if redisConfig.Address == "" {
-		redisConfig.Address = "localhost:6379"
-	}
+	config := util.Must(config.Load())
 
-	redisClient, err := redis.New(redisConfig)
-	if err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
-	}
+	logger := slog.New(tint.NewHandler(os.Stdout, &tint.Options{}))
+
+	redisClient := util.Must(redis.New(redis.Config{
+		Address:  config.Redis.Address,
+		Password: config.Redis.Password,
+		DB:       config.Redis.DB,
+	}))
 	defer redisClient.Close()
 
-	// Initialize Service
-	svc := ingest.New(redisClient)
+	r := chi.NewRouter()
+	httpin_integration.UseGochiURLParam("path", chi.URLParam)
 
-	// HTTP Handler
-	http.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	ingestService := ingestservice.New(logger, redisClient)
 
-		var logEntry models.Log
-		if err := json.NewDecoder(r.Body).Decode(&logEntry); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
+	http_handler.SetupFrontendHttpHandler(r)
+	r.With(cors.Handler(cors.Options{
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowOriginFunc: func(r *http.Request, origin string) bool {
+			return true
+		},
+		AllowCredentials: true,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+	})).Route("/api/", func(r chi.Router) {
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("OK"))
+		})
 
-		if err := svc.IngestLog(r.Context(), logEntry); err != nil {
-			log.Printf("Failed to ingest log: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
+		http_handler.SetupIngestHttpHandler(r, ingestService)
 
-		w.WriteHeader(http.StatusAccepted)
+		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("Not Found"))
+		})
 	})
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	fmt.Printf("Ingest service listening on port %s...\n", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	logger.Info("starting server on port " + config.App.Port)
+	if err := http.ListenAndServe(":"+config.App.Port, r); err != nil && err != http.ErrServerClosed {
+		logger.Error("server error", slog.Any("error", err))
+		os.Exit(1)
 	}
 }
