@@ -19,7 +19,9 @@ type RedisConfig struct {
 }
 
 type AppConfig struct {
-	Port string `env:"PORT"`
+	Environment string `env:"ENVIRONMENT"`
+	IngestPort  string `env:"INGEST_PORT"`
+	AppPort     string `env:"APP_PORT"`
 }
 
 func Load() (*Config, error) {

@@ -1,5 +1,8 @@
 CH_MIGRATIONS_DIR := internal/infra/clickhouse-db/migrations
 
+dev-ingest:
+	wgo run ./cmd/ingest
+	
 create-ch-migration:
 ifndef NAME
 	$(error NAME is required. Usage: make create-ch-migration NAME=<migration_name>)

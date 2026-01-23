@@ -19,7 +19,10 @@ import (
 func main() {
 	config := util.Must(config.Load())
 
-	logger := slog.New(tint.NewHandler(os.Stdout, &tint.Options{}))
+	logger := slog.New(tint.NewHandler(os.Stdout, &tint.Options{})).With(
+		slog.String("service", "ingest"),
+		slog.String("environment", config.App.Environment),
+	)
 
 	redisClient := util.Must(redis.New(redis.Config{
 		Address:  config.Redis.Address,
@@ -33,15 +36,13 @@ func main() {
 
 	ingestService := ingestservice.New(logger, redisClient)
 
-	http_handler.SetupFrontendHttpHandler(r)
 	r.With(cors.Handler(cors.Options{
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowOriginFunc: func(r *http.Request, origin string) bool {
 			return true
 		},
-		AllowCredentials: true,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
-	})).Route("/api/", func(r chi.Router) {
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+	})).Route("/", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("OK"))
 		})
@@ -50,12 +51,11 @@ func main() {
 
 		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("Not Found"))
 		})
 	})
 
-	logger.Info("starting server on port " + config.App.Port)
-	if err := http.ListenAndServe(":"+config.App.Port, r); err != nil && err != http.ErrServerClosed {
+	logger.Info("starting ingest server on port " + config.App.IngestPort)
+	if err := http.ListenAndServe(":"+config.App.IngestPort, r); err != nil && err != http.ErrServerClosed {
 		logger.Error("server error", slog.Any("error", err))
 		os.Exit(1)
 	}
