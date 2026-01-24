@@ -8,14 +8,19 @@ import (
 )
 
 type Config struct {
-	App   AppConfig   `envPrefix:"APP_"`
-	Redis RedisConfig `envPrefix:"REDIS_"`
+	App      AppConfig      `envPrefix:"APP_"`
+	Redis    RedisConfig    `envPrefix:"REDIS_"`
+	Postgres PostgresConfig `envPrefix:"POSTGRES_"`
 }
 
 type RedisConfig struct {
 	Address  string `env:"ADDRESS"`
 	Password string `env:"PASSWORD"`
 	DB       int    `env:"DB"`
+}
+
+type PostgresConfig struct {
+	URL string `env:"URL"` // e.g., postgres://user:pass@localhost:5432/dbname?sslmode=disable
 }
 
 type AppConfig struct {
