@@ -8,19 +8,32 @@ import (
 )
 
 type Config struct {
-	App      AppConfig      `envPrefix:"APP_"`
-	Redis    RedisConfig    `envPrefix:"REDIS_"`
-	Postgres PostgresConfig `envPrefix:"POSTGRES_"`
+	App        AppConfig        `envPrefix:"APP_"`
+	Postgres   PostgresConfig   `envPrefix:"POSTGRES_"`
+	Clickhouse ClickhouseConfig `envPrefix:"CLICKHOUSE_"`
+	Redis      RedisConfig      `envPrefix:"REDIS_"`
+	Session    SessionConfig    `envPrefix:"SESSION_"`
+}
+
+type PostgresConfig struct {
+	URL string `env:"URL"`
+}
+
+type SessionConfig struct {
+	CookieName string `env:"COOKIE_NAME"`
+}
+
+type ClickhouseConfig struct {
+	Address  string `env:"ADDRESS"`
+	Database string `env:"DATABASE"`
+	User     string `env:"USER"`
+	Password string `env:"PASSWORD"`
 }
 
 type RedisConfig struct {
 	Address  string `env:"ADDRESS"`
 	Password string `env:"PASSWORD"`
 	DB       int    `env:"DB"`
-}
-
-type PostgresConfig struct {
-	URL string `env:"URL"` // e.g., postgres://user:pass@localhost:5432/dbname?sslmode=disable
 }
 
 type AppConfig struct {

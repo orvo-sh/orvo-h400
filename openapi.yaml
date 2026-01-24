@@ -1,0 +1,416 @@
+components:
+  schemas:
+    CreateOrganizationInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateOrganizationInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        logo:
+          format: uri
+          type: string
+        name:
+          maxLength: 100
+          minLength: 1
+          type: string
+        set_as_active_organization:
+          type: boolean
+      required:
+        - set_as_active_organization
+        - name
+      type: object
+    CreateOrganizationOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateOrganizationOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        id:
+          type: string
+      required:
+        - id
+      type: object
+    ErrorDetail:
+      additionalProperties: false
+      properties:
+        location:
+          description: Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id'
+          type: string
+        message:
+          description: Error message text
+          type: string
+        value:
+          description: The value at the given location
+      type: object
+    ErrorModel:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ErrorModel.json
+          format: uri
+          readOnly: true
+          type: string
+        detail:
+          description: A human-readable explanation specific to this occurrence of the problem.
+          examples:
+            - Property foo is required but is missing.
+          type: string
+        errors:
+          description: Optional list of individual error details
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+          type:
+            - array
+            - "null"
+        instance:
+          description: A URI reference that identifies the specific occurrence of the problem.
+          examples:
+            - https://example.com/error-log/abc123
+          format: uri
+          type: string
+        status:
+          description: HTTP status code
+          examples:
+            - 400
+          format: int64
+          type: integer
+        title:
+          description: A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
+          examples:
+            - Bad Request
+          type: string
+        type:
+          default: about:blank
+          description: A URI reference to human-readable documentation for the error.
+          examples:
+            - https://example.com/errors/example
+          format: uri
+          type: string
+      type: object
+    GetSessionDataOutput_Organization:
+      additionalProperties: false
+      properties:
+        created_at:
+          format: date-time
+          type: string
+        id:
+          type: string
+        logo:
+          type:
+            - string
+            - "null"
+        member_role:
+          type: string
+        name:
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+      required:
+        - member_role
+        - id
+        - name
+        - logo
+        - created_at
+        - updated_at
+      type: object
+    GetSessionOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GetSessionOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        active_organization:
+          $ref: "#/components/schemas/GetSessionDataOutput_Organization"
+        session:
+          $ref: "#/components/schemas/Session"
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - session
+        - user
+        - active_organization
+      type: object
+    LoginInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LoginInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        email:
+          format: email
+          type: string
+        password:
+          maxLength: 72
+          minLength: 8
+          type: string
+      required:
+        - email
+        - password
+      type: object
+    RegisterInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RegisterInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        email:
+          format: email
+          type: string
+        name:
+          maxLength: 100
+          minLength: 1
+          type: string
+        password:
+          maxLength: 72
+          minLength: 8
+          type: string
+      required:
+        - email
+        - password
+        - name
+      type: object
+    Session:
+      additionalProperties: false
+      properties:
+        active_organization_id:
+          type:
+            - string
+            - "null"
+        created_at:
+          format: date-time
+          type: string
+        expires_at:
+          format: date-time
+          type: string
+        id:
+          type: string
+        ip_address:
+          type:
+            - string
+            - "null"
+        updated_at:
+          format: date-time
+          type: string
+        user_agent:
+          type:
+            - string
+            - "null"
+        user_id:
+          type: string
+      required:
+        - id
+        - user_id
+        - active_organization_id
+        - ip_address
+        - user_agent
+        - expires_at
+        - created_at
+        - updated_at
+      type: object
+    SetActiveOrganizationInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetActiveOrganizationInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        organization_id:
+          type:
+            - string
+            - "null"
+      required:
+        - organization_id
+      type: object
+    User:
+      additionalProperties: false
+      properties:
+        created_at:
+          format: date-time
+          type: string
+        email:
+          type: string
+        email_verified:
+          type: boolean
+        id:
+          type: string
+        image:
+          type:
+            - string
+            - "null"
+        name:
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+      required:
+        - id
+        - email
+        - email_verified
+        - name
+        - image
+        - created_at
+        - updated_at
+      type: object
+  securitySchemes:
+    bearerAuth:
+      in: cookie
+      name: orvo_sess
+      type: apiKey
+info:
+  title: Orvo API
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - auth
+  /auth/logout:
+    post:
+      operationId: logout
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - auth
+  /auth/register:
+    post:
+      operationId: register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - auth
+  /auth/session:
+    get:
+      operationId: get-session
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetSessionOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - auth
+  /auth/session/active-organization:
+    post:
+      operationId: set-active-organization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetActiveOrganizationInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - auth
+  /organizations:
+    post:
+      operationId: create-organization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrganizationInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateOrganizationOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - organizations
+servers:
+  - url: /api/v1
+

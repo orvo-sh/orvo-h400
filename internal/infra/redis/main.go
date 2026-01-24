@@ -17,14 +17,14 @@ type Config struct {
 	DB       int
 }
 
-func New(config Config) (*Client, error) {
+func New(ctx context.Context, config Config) (*Client, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     config.Address,
 		Password: config.Password,
 		DB:       config.DB,
 	})
 
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
+	if err := rdb.Ping(ctx).Err(); err != nil {
 		return nil, err
 	}
 
@@ -33,7 +33,7 @@ func New(config Config) (*Client, error) {
 	}, nil
 }
 
-func (r *Client) RPush(ctx context.Context, key string, values ...interface{}) error {
+func (r *Client) RPush(ctx context.Context, key string, values ...any) error {
 	return r.client.RPush(ctx, key, values...).Err()
 }
 

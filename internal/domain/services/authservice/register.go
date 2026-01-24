@@ -2,184 +2,101 @@ package authservice
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
-	"errors"
+	"log/slog"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/orvo-sh/orvo/internal/infra/postgres-db/db"
+	"github.com/orvo-sh/orvo/internal/domain/errs"
+	"github.com/orvo-sh/orvo/internal/domain/models"
+	"github.com/orvo-sh/orvo/internal/infra/postgres"
+	"github.com/orvo-sh/orvo/internal/infra/postgres/db"
 	"github.com/orvo-sh/orvo/pkg/apperr"
 	"github.com/orvo-sh/orvo/pkg/pgutil"
 	"github.com/orvo-sh/orvo/pkg/util"
 )
 
-var (
-	ErrInvalidCredentials = apperr.New(401, "invalid_credentials")
-	ErrEmailAlreadyExists = apperr.New(409, "email_already_exists")
-	ErrSessionNotFound    = apperr.New(401, "session_not_found")
-	ErrSessionExpired     = apperr.New(401, "session_expired")
-	ErrUserNotFound       = apperr.New(404, "user_not_found")
-)
-
 type RegisterInput struct {
-	Email    string
-	Password string
-	Name     string
+	Email                string
+	Password             string
+	Name                 string
+	IpAddress            *string
+	UserAgent            *string
+	ActiveOrganizationID *string
 }
 
-func (s *service) Register(ctx context.Context, input RegisterInput) (*SessionData, apperr.Error) {
-	// Check if email already exists
-	_, err := s.queries.GetUserByEmail(ctx, input.Email)
-	if err == nil {
-		return nil, ErrEmailAlreadyExists
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		s.logger.Error("failed to check existing user", "error", err)
-		return nil, apperr.ErrInternal
-	}
+func (s *service) Register(ctx context.Context, input RegisterInput) (*models.Session, apperr.Error) {
+	s.logger.InfoContext(ctx, "Register: registering user", slog.Any("input", input))
 
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-	if err != nil {
-		s.logger.Error("failed to hash password", "error", err)
-		return nil, apperr.ErrInternal
-	}
+	var session models.Session
 
-	// Create user
-	userID := util.GenerateID("usr")
-	user, err := s.queries.CreateUser(ctx, db.CreateUserParams{
-		ID:            userID,
-		Email:         input.Email,
-		EmailVerified: false,
-		Name:          input.Name,
-		Image:         pgutil.NullText(),
-	})
-	if err != nil {
-		s.logger.Error("failed to create user", "error", err)
-		return nil, apperr.ErrInternal
-	}
-
-	// Create credential account
-	accountID := util.GenerateID("acc")
-	_, err = s.queries.CreateAccount(ctx, db.CreateAccountParams{
-		ID:                accountID,
-		UserID:            userID,
-		Provider:          "credential",
-		ProviderAccountID: input.Email,
-		PasswordHash:      pgutil.TextFromString(string(hashedPassword)),
-	})
-	if err != nil {
-		s.logger.Error("failed to create account", "error", err)
-		return nil, apperr.ErrInternal
-	}
-
-	// Create session
-	return s.createSession(ctx, &user, nil, nil)
-}
-
-type LoginInput struct {
-	Email    string
-	Password string
-	// Optional: for tracking
-	IPAddress *string
-	UserAgent *string
-}
-
-func (s *service) Login(ctx context.Context, input LoginInput) (*SessionData, apperr.Error) {
-	// Get user by email
-	user, err := s.queries.GetUserByEmail(ctx, input.Email)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrInvalidCredentials
+	err := s.postgres.WithTx(ctx, func(q *postgres.Queries) error {
+		user, err := s.postgres.Queries.CreateUser(ctx, db.CreateUserParams{
+			ID:            util.GenerateID("usr"),
+			Email:         input.Email,
+			EmailVerified: false,
+			Name:          input.Name,
+		})
+		if err != nil {
+			if pgutil.IsUniqueViolationError(err, []string{"email"}) {
+				return errs.ErrEmailAlreadyExists
+			}
+			s.logger.ErrorContext(ctx, "Register: failed to create user", slog.Any("error", err))
+			return errs.ErrInternal
 		}
-		s.logger.Error("failed to get user", "error", err)
-		return nil, apperr.ErrInternal
-	}
 
-	// Get credential account
-	account, err := s.queries.GetAccountByProvider(ctx, db.GetAccountByProviderParams{
-		Provider:          "credential",
-		ProviderAccountID: input.Email,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrInvalidCredentials
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Register: failed to hash password", slog.Any("error", err))
+			return errs.ErrInternal
 		}
-		s.logger.Error("failed to get account", "error", err)
-		return nil, apperr.ErrInternal
-	}
 
-	// Verify password
-	if !account.PasswordHash.Valid {
-		return nil, ErrInvalidCredentials
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash.String), []byte(input.Password)); err != nil {
-		return nil, ErrInvalidCredentials
-	}
+		if _, err = s.postgres.Queries.CreateAccount(ctx, db.CreateAccountParams{
+			ID:                util.GenerateID("acc"),
+			UserID:            user.ID,
+			Provider:          string(models.AccountProviderEmail),
+			ProviderAccountID: input.Email,
+			PasswordHash:      pgutil.TextFromString(string(hashedPassword)),
+		}); err != nil {
+			s.logger.ErrorContext(ctx, "Register: failed to create account", slog.Any("error", err))
+			return errs.ErrInternal
+		}
 
-	// Create session
-	return s.createSession(ctx, &user, input.IPAddress, input.UserAgent)
-}
+		dbSession, err := s.postgres.Queries.CreateSession(ctx, db.CreateSessionParams{
+			ID:                   util.GenerateID("ses"),
+			Token:                util.GenerateRandomString(),
+			UserID:               user.ID,
+			ActiveOrganizationID: pgutil.Text(input.ActiveOrganizationID),
+			IpAddress:            pgutil.Text(input.IpAddress),
+			UserAgent:            pgutil.Text(input.UserAgent),
+			ExpiresAt:            pgutil.Timestamptz(time.Now().Add(s.config.SessionExpiresIn)),
+		})
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Register: failed to create session", slog.Any("error", err))
+			return errs.ErrInternal
+		}
+		session = models.Session{
+			ID:                   dbSession.ID,
+			Token:                dbSession.Token,
+			UserID:               dbSession.UserID,
+			ActiveOrganizationID: pgutil.TextToPtr(dbSession.ActiveOrganizationID),
+			IpAddress:            pgutil.TextToPtr(dbSession.IpAddress),
+			UserAgent:            pgutil.TextToPtr(dbSession.UserAgent),
+			ExpiresAt:            dbSession.ExpiresAt.Time,
+			CreatedAt:            dbSession.CreatedAt.Time,
+			UpdatedAt:            dbSession.UpdatedAt.Time,
+		}
 
-func (s *service) Logout(ctx context.Context, token string) apperr.Error {
-	err := s.queries.DeleteSessionByToken(ctx, token)
-	if err != nil {
-		s.logger.Error("failed to delete session", "error", err)
-		return apperr.ErrInternal
-	}
-	return nil
-}
-
-// createSession creates a new session for a user
-func (s *service) createSession(ctx context.Context, user *db.User, ipAddress, userAgent *string) (*SessionData, apperr.Error) {
-	sessionID := util.GenerateID("ses")
-	token := generateSessionToken()
-
-	session, err := s.queries.CreateSession(ctx, db.CreateSessionParams{
-		ID:                   sessionID,
-		Token:                token,
-		UserID:               user.ID,
-		ActiveOrganizationID: pgutil.NullText(),
-		IpAddress:            pgutil.Text(ipAddress),
-		UserAgent:            pgutil.Text(userAgent),
-		ExpiresAt:            pgutil.Timestamptz(time.Now().Add(s.sessionExpiresIn)),
+		return nil
 	})
+
 	if err != nil {
-		s.logger.Error("failed to create session", "error", err)
-		return nil, apperr.ErrInternal
+		if appErr, ok := err.(apperr.Error); ok {
+			return nil, appErr
+		}
+		s.logger.ErrorContext(ctx, "Register: transaction failed", slog.Any("error", err))
+		return nil, errs.ErrInternal
 	}
 
-	return &SessionData{
-		Session: &Session{
-			ID:                   session.ID,
-			Token:                session.Token,
-			UserID:               session.UserID,
-			ActiveOrganizationID: pgutil.TextToPtr(session.ActiveOrganizationID),
-			IPAddress:            pgutil.TextToPtr(session.IpAddress),
-			UserAgent:            pgutil.TextToPtr(session.UserAgent),
-			ExpiresAt:            pgutil.TimestamptzToTime(session.ExpiresAt),
-			CreatedAt:            pgutil.TimestamptzToTime(session.CreatedAt),
-		},
-		User: &User{
-			ID:            user.ID,
-			Email:         user.Email,
-			EmailVerified: user.EmailVerified,
-			Name:          user.Name,
-			Image:         pgutil.TextToPtr(user.Image),
-			CreatedAt:     pgutil.TimestamptzToTime(user.CreatedAt),
-		},
-		ActiveOrganization: nil,
-	}, nil
-}
-
-// generateSessionToken generates a cryptographically secure session token
-func generateSessionToken() string {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		panic(err)
-	}
-	return base64.URLEncoding.EncodeToString(bytes)
+	return &session, nil
 }
