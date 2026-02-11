@@ -2,21 +2,24 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import EyeOffIcon from '@lucide/svelte/icons/eye-off';
-	import type { HistogramBucket } from './mock-data';
+	import type { HistogramBucket } from '$lib/api/model';
 
 	let {
 		data,
 		visible = true,
+		loading = false,
 		onToggleVisibility = () => {}
 	}: {
 		data: HistogramBucket[];
 		visible?: boolean;
+		loading?: boolean;
 		onToggleVisibility?: () => void;
 	} = $props();
 
 	const maxCount = $derived(Math.max(...data.map((d) => d.count), 1));
 
-	function formatTime(date: Date): string {
+	function formatTime(iso: string): string {
+		const date = new Date(iso);
 		return date.toLocaleTimeString('en-US', {
 			hour: '2-digit',
 			minute: '2-digit',
@@ -40,7 +43,21 @@
 		<Card.Content class="px-4 pb-4">
 			<!-- Chart Area -->
 			<div class="h-20">
-				<!-- Y-axis labels -->
+				{#if loading && data.length === 0}
+					<!-- Loading skeleton -->
+					<div class="flex h-full items-end gap-[2px] pl-10">
+						{#each Array(24) as _, i (i)}
+							<div
+								class="flex-1 animate-pulse rounded-t-sm bg-muted"
+								style="height: {20 + Math.random() * 60}%"
+							></div>
+						{/each}
+					</div>
+				{:else if data.length === 0}
+					<div class="flex h-full items-center justify-center text-sm text-muted-foreground">
+						No histogram data
+					</div>
+				{:else}
 				<div class="flex h-full">
 					<div
 						class="flex w-8 flex-col justify-between pr-2 text-right text-xs text-muted-foreground"
@@ -71,6 +88,7 @@
 						{/each}
 					</div>
 				</div>
+				{/if}
 			</div>
 		</Card.Content>
 	</Card.Root>

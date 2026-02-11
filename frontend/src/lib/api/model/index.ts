@@ -5,13 +5,29 @@
  * OpenAPI spec version: 1.0.0
  */
 
+export * from './apiKey';
+export * from './createApiKeyInputBody';
+export * from './createApiKeyOutputBody';
 export * from './createOrganizationInputBody';
 export * from './createOrganizationOutputBody';
 export * from './errorDetail';
 export * from './errorModel';
+export * from './getHistogramOutputBody';
+export * from './getLogHistogramParams';
+export * from './getServicesOutputBody';
 export * from './getSessionDataOutputOrganization';
 export * from './getSessionOutputBody';
+export * from './histogramBucket';
+export * from './listApiKeysOutputBody';
+export * from './listOrganizationsOutputBody';
 export * from './loginInputBody';
+export * from './logRecord';
+export * from './logRecordLogAttributes';
+export * from './logRecordResourceAttributes';
+export * from './logRecordScopeAttributes';
+export * from './organization';
+export * from './queryLogsOutputBody';
+export * from './queryLogsParams';
 export * from './registerInputBody';
 export * from './session';
 export * from './setActiveOrganizationInputBody';

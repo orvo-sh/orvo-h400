@@ -6,30 +6,28 @@
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import XIcon from '@lucide/svelte/icons/x';
-	import type { LogLevel } from './mock-data';
+
+	type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 
 	let {
 		searchQuery = $bindable(''),
 		selectedService = $bindable<string | undefined>(undefined),
 		selectedLevel = $bindable<LogLevel | undefined>(undefined),
 		selectedTimeRange = $bindable('1h'),
+		services: serviceNames = [],
 		onSearch = () => {}
 	}: {
 		searchQuery?: string;
 		selectedService?: string;
 		selectedLevel?: LogLevel;
 		selectedTimeRange?: string;
+		services?: string[];
 		onSearch?: () => void;
 	} = $props();
 
-	const services = [
-		{ value: 'api-gateway', label: 'api-gateway' },
-		{ value: 'user-service', label: 'user-service' },
-		{ value: 'payment-service', label: 'payment-service' },
-		{ value: 'notification-service', label: 'notification-service' },
-		{ value: 'auth-service', label: 'auth-service' },
-		{ value: 'frontend', label: 'frontend' }
-	];
+	const serviceOptions = $derived(
+		serviceNames.map((s) => ({ value: s, label: s }))
+	);
 
 	const levels: { value: LogLevel; label: string }[] = [
 		{ value: 'debug', label: 'Debug' },
@@ -73,7 +71,7 @@
 			{/if}
 		</Select.Trigger>
 		<Select.Content>
-			{#each services as service (service.value)}
+			{#each serviceOptions as service (service.value)}
 				<Select.Item value={service.value}>{service.label}</Select.Item>
 			{/each}
 		</Select.Content>

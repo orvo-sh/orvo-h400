@@ -10,6 +10,7 @@ import (
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
 	dto "github.com/orvo-sh/orvo/internal/http/dto"
 	"github.com/orvo-sh/orvo/internal/http/middleware/authmiddleware"
+	"github.com/orvo-sh/orvo/pkg/sensitive"
 )
 
 type AuthHandler struct {
@@ -21,12 +22,14 @@ type NewAuthConfig struct {
 	SessionCookieKey       string
 	SessionCookieDomain    string
 	SessionCookieSecure    bool
+	SessionCookieSameSite  http.SameSite
 	SessionCookieExpiresIn time.Duration
 }
 
 func NewAuthHandler(authService authservice.Service, config NewAuthConfig) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
+		config:      config,
 	}
 }
 
@@ -75,20 +78,23 @@ func (h *AuthHandler) RegisterRoutes(api huma.API) {
 func (h *AuthHandler) register(ctx context.Context, input *dto.RegisterInput) (*dto.SessionOutput, error) {
 	if session, err := h.authService.Register(ctx, authservice.RegisterInput{
 		Email:    input.Body.Email,
-		Password: input.Body.Password,
+		Password: sensitive.New(input.Body.Password),
 		Name:     input.Body.Name,
 	}); err != nil {
 		return nil, err
 	} else {
 		return &dto.SessionOutput{
-			SetCookie: http.Cookie{
-				Name:     h.config.SessionCookieKey,
-				Path:     "/",
-				Value:    session.Token,
-				Domain:   h.config.SessionCookieDomain,
-				Secure:   h.config.SessionCookieSecure,
-				MaxAge:   int(h.config.SessionCookieExpiresIn.Seconds()),
-				HttpOnly: true,
+			SetCookie: []http.Cookie{
+				{
+					Name:     h.config.SessionCookieKey,
+					Path:     "/",
+					Value:    session.Token,
+					Domain:   h.config.SessionCookieDomain,
+					Secure:   h.config.SessionCookieSecure,
+					SameSite: h.config.SessionCookieSameSite,
+					MaxAge:   int(h.config.SessionCookieExpiresIn.Seconds()),
+					HttpOnly: true,
+				},
 			},
 		}, nil
 	}
@@ -97,19 +103,22 @@ func (h *AuthHandler) register(ctx context.Context, input *dto.RegisterInput) (*
 func (h *AuthHandler) login(ctx context.Context, input *dto.LoginInput) (*dto.SessionOutput, error) {
 	if session, err := h.authService.Login(ctx, authservice.LoginInput{
 		Email:    input.Body.Email,
-		Password: input.Body.Password,
+		Password: sensitive.New(input.Body.Password),
 	}); err != nil {
 		return nil, err
 	} else {
 		return &dto.SessionOutput{
-			SetCookie: http.Cookie{
-				Name:     h.config.SessionCookieKey,
-				Path:     "/",
-				Value:    session.Token,
-				Domain:   h.config.SessionCookieDomain,
-				Secure:   h.config.SessionCookieSecure,
-				MaxAge:   int(h.config.SessionCookieExpiresIn.Seconds()),
-				HttpOnly: true,
+			SetCookie: []http.Cookie{
+				{
+					Name:     h.config.SessionCookieKey,
+					Path:     "/",
+					Value:    session.Token,
+					Domain:   h.config.SessionCookieDomain,
+					Secure:   h.config.SessionCookieSecure,
+					SameSite: h.config.SessionCookieSameSite,
+					MaxAge:   int(h.config.SessionCookieExpiresIn.Seconds()),
+					HttpOnly: true,
+				},
 			},
 		}, nil
 	}

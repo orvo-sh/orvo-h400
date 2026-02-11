@@ -9,8 +9,18 @@ import (
 	"github.com/orvo-sh/orvo/pkg/apperr"
 )
 
+type ListOrganizationItem struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Slug      string  `json:"slug"`
+	Logo      *string `json:"logo"`
+	Role      string  `json:"role"`
+	CreatedAt string  `json:"created_at"`
+}
+
 type Service interface {
 	CreateOrganization(ctx context.Context, input CreateOrganizationInput) (*models.Organization, apperr.Error)
+	ListOrganizations(ctx context.Context, userID string) ([]ListOrganizationItem, apperr.Error)
 }
 
 type service struct {

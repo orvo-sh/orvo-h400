@@ -13,10 +13,16 @@ type Config struct {
 	Clickhouse ClickhouseConfig `envPrefix:"CLICKHOUSE_"`
 	Redis      RedisConfig      `envPrefix:"REDIS_"`
 	Session    SessionConfig    `envPrefix:"SESSION_"`
+	Otel       OtelConfig       `envPrefix:"OTEL_"`
 }
 
 type PostgresConfig struct {
 	URL string `env:"URL"`
+}
+
+type OtelConfig struct {
+	Endpoint string `env:"ENDPOINT"`
+	ApiKey   string `env:"API_KEY"`
 }
 
 type SessionConfig struct {

@@ -9,7 +9,7 @@
   import CreditCardIcon from "@lucide/svelte/icons/credit-card";
   import LogOutIcon from "@lucide/svelte/icons/log-out";
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
-  let { user }: { user: { name: string; email: string; avatar: string } } = $props();
+  let { user, onLogout }: { user: { name: string; email: string; avatar: string }; onLogout?: () => void } = $props();
   const sidebar = useSidebar();
 </script>
 <Sidebar.Menu>
@@ -24,7 +24,7 @@
           >
             <Avatar.Root class="size-8 rounded-lg">
               <Avatar.Image src={user.avatar} alt={user.name} />
-              <Avatar.Fallback class="rounded-lg">CN</Avatar.Fallback>
+              <Avatar.Fallback class="rounded-lg">{user.name.slice(0, 2).toUpperCase()}</Avatar.Fallback>
             </Avatar.Root>
             <div class="grid flex-1 text-start text-sm leading-tight">
               <span class="truncate font-medium">{user.name}</span>
@@ -44,7 +44,7 @@
           <div class="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
             <Avatar.Root class="size-8 rounded-lg">
               <Avatar.Image src={user.avatar} alt={user.name} />
-              <Avatar.Fallback class="rounded-lg">CN</Avatar.Fallback>
+              <Avatar.Fallback class="rounded-lg">{user.name.slice(0, 2).toUpperCase()}</Avatar.Fallback>
             </Avatar.Root>
             <div class="grid flex-1 text-start text-sm leading-tight">
               <span class="truncate font-medium">{user.name}</span>
@@ -75,7 +75,7 @@
           </DropdownMenu.Item>
         </DropdownMenu.Group>
         <DropdownMenu.Separator />
-        <DropdownMenu.Item>
+        <DropdownMenu.Item onSelect={() => onLogout?.()}>
           <LogOutIcon />
           Log out
         </DropdownMenu.Item>

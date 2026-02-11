@@ -2,8 +2,6 @@ package pgutil
 
 import (
 	"errors"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgconn"
@@ -99,37 +97,14 @@ func NullBool() pgtype.Bool {
 	return pgtype.Bool{Valid: false}
 }
 
-var uniqueViolationRegex = regexp.MustCompile(`Key \(([^)]+)\)=`)
-
-func IsUniqueViolationError(err error, fields []string) bool {
+func IsUniqueViolationError(err error, name string) bool {
 	pgErr, ok := err.(*pgconn.PgError)
 	if !ok || pgErr.Code != "23505" {
 		return false
 	}
 
-	if len(fields) == 0 {
+	if pgErr.ConstraintName == name {
 		return true
-	}
-
-	matches := uniqueViolationRegex.FindStringSubmatch(pgErr.Detail)
-	if len(matches) < 2 {
-		return false
-	}
-
-	columnList := matches[1]
-	affectedColumns := strings.Split(columnList, ", ")
-
-	for _, requiredField := range fields {
-		found := false
-		for _, col := range affectedColumns {
-			if col == requiredField {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
 	}
 
 	return true

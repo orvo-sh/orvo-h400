@@ -5,19 +5,26 @@
  * OpenAPI spec version: 1.0.0
  */
 import {
-  createMutation
+  createMutation,
+  createQuery
 } from '@tanstack/svelte-query';
 import type {
   CreateMutationOptions,
   CreateMutationResult,
+  CreateQueryOptions,
+  CreateQueryResult,
+  DataTag,
   MutationFunction,
-  QueryClient
+  QueryClient,
+  QueryFunction,
+  QueryKey
 } from '@tanstack/svelte-query';
 
 import type {
   CreateOrganizationInputBody,
   CreateOrganizationOutputBody,
-  ErrorModel
+  ErrorModel,
+  ListOrganizationsOutputBody
 } from '../../model';
 
 
@@ -59,6 +66,100 @@ export type HTTPStatusCode5xx = 500 | 501 | 502 | 503 | 504 | 505 | 507 | 511;
 export type HTTPStatusCodes = HTTPStatusCode1xx | HTTPStatusCode2xx | HTTPStatusCode3xx | HTTPStatusCode4xx | HTTPStatusCode5xx;
 
 
+export type listOrganizationsResponse200 = {
+  data: ListOrganizationsOutputBody
+  status: 200
+}
+
+export type listOrganizationsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+    
+export type listOrganizationsResponseSuccess = (listOrganizationsResponse200) & {
+  headers: Headers;
+};
+export type listOrganizationsResponseError = (listOrganizationsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listOrganizationsResponse = (listOrganizationsResponseSuccess | listOrganizationsResponseError)
+
+export const getListOrganizationsUrl = () => {
+
+
+  
+
+  return `http://localhost:8080/api/v1/organizations`
+}
+
+export const listOrganizations = async ( options?: RequestInit): Promise<listOrganizationsResponse> => {
+  
+  const res = await fetch(getListOrganizationsUrl(),
+  {
+      credentials: 'include',
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: listOrganizationsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listOrganizationsResponse
+}
+
+
+
+
+
+export const getListOrganizationsQueryKey = () => {
+    return [
+    `http://localhost:8080/api/v1/organizations`
+    ] as const;
+    }
+
+    
+export const getListOrganizationsQueryOptions = <TData = Awaited<ReturnType<typeof listOrganizations>>, TError = ErrorModel>( options?: { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof listOrganizations>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOrganizationsQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOrganizations>>> = ({ signal }) => listOrganizations({ signal, ...fetchOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as CreateQueryOptions<Awaited<ReturnType<typeof listOrganizations>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListOrganizationsQueryResult = NonNullable<Awaited<ReturnType<typeof listOrganizations>>>
+export type ListOrganizationsQueryError = ErrorModel
+
+
+
+export function createListOrganizations<TData = Awaited<ReturnType<typeof listOrganizations>>, TError = ErrorModel>(
+  options?: () => { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof listOrganizations>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: () => QueryClient 
+ ): CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  
+
+  const query = createQuery(() => getListOrganizationsQueryOptions(options?.()), queryClient) as CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return query
+}
+
+
+
+
 export type createOrganizationResponse200 = {
   data: CreateOrganizationOutputBody
   status: 200
@@ -83,13 +184,14 @@ export const getCreateOrganizationUrl = () => {
 
   
 
-  return `/api/v1/organizations`
+  return `http://localhost:8080/api/v1/organizations`
 }
 
 export const createOrganization = async (createOrganizationInputBody: NonReadonly<CreateOrganizationInputBody>, options?: RequestInit): Promise<createOrganizationResponse> => {
   
   const res = await fetch(getCreateOrganizationUrl(),
-  {      
+  {
+      credentials: 'include',
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },

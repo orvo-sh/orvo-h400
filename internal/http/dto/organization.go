@@ -13,3 +13,18 @@ type CreateOrganizationOutput struct {
 		ID string `json:"id"`
 	}
 }
+
+type Organization struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Slug      string  `json:"slug"`
+	Logo      *string `json:"logo"`
+	Role      string  `json:"role"`
+	CreatedAt string  `json:"created_at"`
+}
+
+type ListOrganizationsOutput struct {
+	Body struct {
+		Organizations []Organization `json:"organizations"`
+	}
+}

@@ -91,13 +91,14 @@ export const getLoginUrl = () => {
 
   
 
-  return `/api/v1/auth/login`
+  return `http://localhost:8080/api/v1/auth/login`
 }
 
 export const login = async (loginInputBody: NonReadonly<LoginInputBody>, options?: RequestInit): Promise<loginResponse> => {
   
   const res = await fetch(getLoginUrl(),
-  {      
+  {
+      credentials: 'include',
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -180,13 +181,14 @@ export const getLogoutUrl = () => {
 
   
 
-  return `/api/v1/auth/logout`
+  return `http://localhost:8080/api/v1/auth/logout`
 }
 
 export const logout = async ( options?: RequestInit): Promise<logoutResponse> => {
   
   const res = await fetch(getLogoutUrl(),
-  {      
+  {
+      credentials: 'include',
     ...options,
     method: 'POST'
     
@@ -268,13 +270,14 @@ export const getRegisterUrl = () => {
 
   
 
-  return `/api/v1/auth/register`
+  return `http://localhost:8080/api/v1/auth/register`
 }
 
 export const register = async (registerInputBody: NonReadonly<RegisterInputBody>, options?: RequestInit): Promise<registerResponse> => {
   
   const res = await fetch(getRegisterUrl(),
-  {      
+  {
+      credentials: 'include',
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -357,13 +360,14 @@ export const getGetSessionUrl = () => {
 
   
 
-  return `/api/v1/auth/session`
+  return `http://localhost:8080/api/v1/auth/session`
 }
 
 export const getSession = async ( options?: RequestInit): Promise<getSessionResponse> => {
   
   const res = await fetch(getGetSessionUrl(),
-  {      
+  {
+      credentials: 'include',
     ...options,
     method: 'GET'
     
@@ -383,7 +387,7 @@ export const getSession = async ( options?: RequestInit): Promise<getSessionResp
 
 export const getGetSessionQueryKey = () => {
     return [
-    `/api/v1/auth/session`
+    `http://localhost:8080/api/v1/auth/session`
     ] as const;
     }
 
@@ -450,13 +454,14 @@ export const getSetActiveOrganizationUrl = () => {
 
   
 
-  return `/api/v1/auth/session/active-organization`
+  return `http://localhost:8080/api/v1/auth/session/active-organization`
 }
 
 export const setActiveOrganization = async (setActiveOrganizationInputBody: NonReadonly<SetActiveOrganizationInputBody>, options?: RequestInit): Promise<setActiveOrganizationResponse> => {
   
   const res = await fetch(getSetActiveOrganizationUrl(),
-  {      
+  {
+      credentials: 'include',
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },

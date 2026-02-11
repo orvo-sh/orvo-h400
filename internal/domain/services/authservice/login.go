@@ -12,12 +12,13 @@ import (
 	"github.com/orvo-sh/orvo/internal/infra/postgres/db"
 	"github.com/orvo-sh/orvo/pkg/apperr"
 	"github.com/orvo-sh/orvo/pkg/pgutil"
+	"github.com/orvo-sh/orvo/pkg/sensitive"
 	"github.com/orvo-sh/orvo/pkg/util"
 )
 
 type LoginInput struct {
 	Email     string
-	Password  string
+	Password  sensitive.Sensitive[string]
 	IpAddress *string
 	UserAgent *string
 }
@@ -49,7 +50,7 @@ func (s *service) Login(ctx context.Context, input LoginInput) (*models.Session,
 	if !account.PasswordHash.Valid {
 		return nil, errs.ErrInvalidCredentials
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash.String), []byte(input.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash.String), []byte(input.Password.Value())); err != nil {
 		return nil, errs.ErrInvalidCredentials
 	}
 

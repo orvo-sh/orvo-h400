@@ -34,17 +34,24 @@ func New(api huma.API, authService authservice.Service) func(huma.Context, func(
 			panic("authmiddleware: authmiddleware.Init must be called before usage of middleware")
 		}
 
+		var token string
+
+		// Try Authorization header first
 		auth := ctx.Header("Authorization")
-		if auth == "" {
-			helpers.ErrResp(ctx, api, errs.ErrMissingAuthorization)
-			return
+		if auth != "" {
+			if strings.HasPrefix(auth, "Bearer ") {
+				token = strings.TrimPrefix(auth, "Bearer ")
+			} else {
+				token = auth
+			}
 		}
 
-		var token string
-		if strings.HasPrefix(auth, "Bearer ") {
-			token = strings.TrimPrefix(auth, "Bearer ")
-		} else {
-			token = auth
+		// Fall back to session cookie for browser-based auth
+		if token == "" {
+			cookie := helpers.GetCookie(ctx, cfg.SessionCookieKey)
+			if cookie != "" {
+				token = cookie
+			}
 		}
 
 		if token == "" {

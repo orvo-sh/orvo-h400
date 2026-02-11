@@ -42,6 +42,7 @@ func (s *service) transformLogs(resourceLogs []*logspb.ResourceLogs, orgID strin
 				}
 
 				records = append(records, models.LogRecord{
+					ID:                    util.GenerateID("log"),
 					Timestamp:             timestamp,
 					ObservedTimestamp:     observedTimestamp,
 					SeverityNumber:        uint8(lr.GetSeverityNumber()),

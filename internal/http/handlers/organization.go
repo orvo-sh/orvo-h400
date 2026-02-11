@@ -33,6 +33,14 @@ func (h *OrganizationHandler) RegisterRoutes(api huma.API) {
 		Tags:        []string{"organizations"},
 		Middlewares: huma.Middlewares{authMiddleware},
 	}, h.createOrganization)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-organizations",
+		Method:      http.MethodGet,
+		Path:        "/organizations",
+		Tags:        []string{"organizations"},
+		Middlewares: huma.Middlewares{authMiddleware},
+	}, h.listOrganizations)
 }
 
 func (h *OrganizationHandler) createOrganization(ctx context.Context, input *dto.CreateOrganizationInput) (*dto.CreateOrganizationOutput, error) {
@@ -61,6 +69,35 @@ func (h *OrganizationHandler) createOrganization(ctx context.Context, input *dto
 			ID string `json:"id"`
 		}{
 			ID: organization.ID,
+		},
+	}, nil
+}
+
+func (h *OrganizationHandler) listOrganizations(ctx context.Context, input *struct{}) (*dto.ListOrganizationsOutput, error) {
+	session := authmiddleware.GetSessionFromContext(ctx)
+
+	items, err := h.orgService.ListOrganizations(ctx, session.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	organizations := make([]dto.Organization, len(items))
+	for i, item := range items {
+		organizations[i] = dto.Organization{
+			ID:        item.ID,
+			Name:      item.Name,
+			Slug:      item.Slug,
+			Logo:      item.Logo,
+			Role:      item.Role,
+			CreatedAt: item.CreatedAt,
+		}
+	}
+
+	return &dto.ListOrganizationsOutput{
+		Body: struct {
+			Organizations []dto.Organization `json:"organizations"`
+		}{
+			Organizations: organizations,
 		},
 	}, nil
 }

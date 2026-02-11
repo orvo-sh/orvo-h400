@@ -34,6 +34,8 @@ func main() {
 
 	handlers.NewAuthHandler(nil, handlers.NewAuthConfig{}).RegisterRoutes(api)
 	handlers.NewOrganizationHandler(nil, nil).RegisterRoutes(api)
+	handlers.NewApiKeyHandler(nil).RegisterRoutes(api)
+	handlers.NewLogHandler(nil, nil).RegisterRoutes(api)
 
 	spec, err := api.OpenAPI().YAML()
 	if err != nil {

@@ -1,5 +1,79 @@
 components:
   schemas:
+    ApiKey:
+      additionalProperties: false
+      properties:
+        created_at:
+          format: date-time
+          type: string
+        expires_at:
+          format: date-time
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+        last_used_at:
+          format: date-time
+          type:
+            - string
+            - "null"
+        name:
+          type: string
+        organization_id:
+          type: string
+        revoked_at:
+          format: date-time
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - organization_id
+        - name
+        - last_used_at
+        - expires_at
+        - created_at
+        - revoked_at
+      type: object
+    CreateApiKeyInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateApiKeyInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        expires_in:
+          format: int64
+          type: integer
+        name:
+          maxLength: 255
+          minLength: 1
+          type: string
+      required:
+        - name
+      type: object
+    CreateApiKeyOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateApiKeyOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        api_key:
+          $ref: "#/components/schemas/ApiKey"
+        key:
+          type: string
+      required:
+        - api_key
+        - key
+      type: object
     CreateOrganizationInputBody:
       additionalProperties: false
       properties:
@@ -97,6 +171,44 @@ components:
           format: uri
           type: string
       type: object
+    GetHistogramOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GetHistogramOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        buckets:
+          items:
+            $ref: "#/components/schemas/HistogramBucket"
+          type:
+            - array
+            - "null"
+      required:
+        - buckets
+      type: object
+    GetServicesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GetServicesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        services:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - services
+      type: object
     GetSessionDataOutput_Organization:
       additionalProperties: false
       properties:
@@ -145,6 +257,157 @@ components:
         - user
         - active_organization
       type: object
+    HistogramBucket:
+      additionalProperties: false
+      properties:
+        count:
+          format: int64
+          minimum: 0
+          type: integer
+        debug:
+          format: int64
+          minimum: 0
+          type: integer
+        error:
+          format: int64
+          minimum: 0
+          type: integer
+        fatal:
+          format: int64
+          minimum: 0
+          type: integer
+        info:
+          format: int64
+          minimum: 0
+          type: integer
+        time:
+          format: date-time
+          type: string
+        warn:
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+        - time
+        - count
+        - debug
+        - info
+        - warn
+        - error
+        - fatal
+      type: object
+    ListApiKeysOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListApiKeysOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        api_keys:
+          items:
+            $ref: "#/components/schemas/ApiKey"
+          type:
+            - array
+            - "null"
+      required:
+        - api_keys
+      type: object
+    ListOrganizationsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListOrganizationsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        organizations:
+          items:
+            $ref: "#/components/schemas/Organization"
+          type:
+            - array
+            - "null"
+      required:
+        - organizations
+      type: object
+    LogRecord:
+      additionalProperties: false
+      properties:
+        body:
+          type: string
+        deployment_environment:
+          type: string
+        id:
+          type: string
+        log_attributes:
+          additionalProperties:
+            type: string
+          type: object
+        observed_timestamp:
+          format: date-time
+          type: string
+        organization_id:
+          type: string
+        resource_attributes:
+          additionalProperties:
+            type: string
+          type: object
+        resource_schema_url:
+          type: string
+        scope_attributes:
+          additionalProperties:
+            type: string
+          type: object
+        scope_name:
+          type: string
+        scope_schema_url:
+          type: string
+        scope_version:
+          type: string
+        service_name:
+          type: string
+        severity_number:
+          format: int32
+          minimum: 0
+          type: integer
+        severity_text:
+          type: string
+        span_id:
+          type: string
+        timestamp:
+          format: date-time
+          type: string
+        trace_flags:
+          format: int32
+          minimum: 0
+          type: integer
+        trace_id:
+          type: string
+      required:
+        - id
+        - timestamp
+        - observed_timestamp
+        - severity_number
+        - severity_text
+        - body
+        - trace_id
+        - span_id
+        - trace_flags
+        - resource_attributes
+        - resource_schema_url
+        - scope_name
+        - scope_version
+        - scope_attributes
+        - scope_schema_url
+        - log_attributes
+        - service_name
+        - deployment_environment
+        - organization_id
+      type: object
     LoginInputBody:
       additionalProperties: false
       properties:
@@ -165,6 +428,53 @@ components:
       required:
         - email
         - password
+      type: object
+    Organization:
+      additionalProperties: false
+      properties:
+        created_at:
+          type: string
+        id:
+          type: string
+        logo:
+          type:
+            - string
+            - "null"
+        name:
+          type: string
+        role:
+          type: string
+        slug:
+          type: string
+      required:
+        - id
+        - name
+        - slug
+        - logo
+        - role
+        - created_at
+      type: object
+    QueryLogsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/QueryLogsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        logs:
+          items:
+            $ref: "#/components/schemas/LogRecord"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          format: date-time
+          type: string
+      required:
+        - logs
       type: object
     RegisterInputBody:
       additionalProperties: false
@@ -388,6 +698,23 @@ paths:
       tags:
         - auth
   /organizations:
+    get:
+      operationId: list-organizations
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListOrganizationsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - organizations
     post:
       operationId: create-organization
       requestBody:
@@ -411,6 +738,248 @@ paths:
           description: Error
       tags:
         - organizations
+  /organizations/{organization_id}/api-keys:
+    get:
+      operationId: list-api-keys
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListApiKeysOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - api-keys
+    post:
+      operationId: create-api-key
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateApiKeyOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - api-keys
+  /organizations/{organization_id}/api-keys/{key_id}:
+    delete:
+      operationId: revoke-api-key
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: key_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - api-keys
+  /organizations/{organization_id}/logs:
+    get:
+      operationId: query-logs
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+        - description: Start time (RFC3339)
+          explode: false
+          in: query
+          name: start
+          schema:
+            description: Start time (RFC3339)
+            type: string
+        - description: End time (RFC3339)
+          explode: false
+          in: query
+          name: end
+          schema:
+            description: End time (RFC3339)
+            type: string
+        - description: Max results to return (default 100, max 1000)
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: Max results to return (default 100, max 1000)
+            format: int64
+            type: integer
+        - description: Pagination cursor (RFC3339Nano timestamp)
+          explode: false
+          in: query
+          name: cursor
+          schema:
+            description: Pagination cursor (RFC3339Nano timestamp)
+            type: string
+        - description: Full-text search on log body
+          explode: false
+          in: query
+          name: search
+          schema:
+            description: Full-text search on log body
+            type: string
+        - description: Filter by service name (comma-separated)
+          explode: false
+          in: query
+          name: service
+          schema:
+            description: Filter by service name (comma-separated)
+            type: string
+        - description: "Filter by severity (comma-separated: debug,info,warn,error,fatal)"
+          explode: false
+          in: query
+          name: severity
+          schema:
+            description: "Filter by severity (comma-separated: debug,info,warn,error,fatal)"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryLogsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - logs
+  /organizations/{organization_id}/logs/histogram:
+    get:
+      operationId: get-log-histogram
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+        - description: Start time (RFC3339)
+          explode: false
+          in: query
+          name: start
+          schema:
+            description: Start time (RFC3339)
+            type: string
+        - description: End time (RFC3339)
+          explode: false
+          in: query
+          name: end
+          schema:
+            description: End time (RFC3339)
+            type: string
+        - description: Bucket interval (1m, 5m, 15m, 30m, 1h, 6h, 12h, 1d)
+          explode: false
+          in: query
+          name: interval
+          schema:
+            description: Bucket interval (1m, 5m, 15m, 30m, 1h, 6h, 12h, 1d)
+            type: string
+        - description: Full-text search on log body
+          explode: false
+          in: query
+          name: search
+          schema:
+            description: Full-text search on log body
+            type: string
+        - description: Filter by service name (comma-separated)
+          explode: false
+          in: query
+          name: service
+          schema:
+            description: Filter by service name (comma-separated)
+            type: string
+        - description: Filter by severity (comma-separated)
+          explode: false
+          in: query
+          name: severity
+          schema:
+            description: Filter by severity (comma-separated)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetHistogramOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - logs
+  /organizations/{organization_id}/logs/services:
+    get:
+      operationId: get-log-services
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetServicesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - logs
 servers:
   - url: /api/v1
 

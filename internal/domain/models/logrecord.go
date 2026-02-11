@@ -3,6 +3,7 @@ package models
 import "time"
 
 type LogRecord struct {
+	ID                    string            `json:"id"`
 	Timestamp             time.Time         `json:"timestamp"`
 	ObservedTimestamp     time.Time         `json:"observed_timestamp"`
 	SeverityNumber        uint8             `json:"severity_number"`

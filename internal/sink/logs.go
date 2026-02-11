@@ -50,6 +50,7 @@ func (s *LogSink) writeBatch(ctx context.Context, records []models.LogRecord) er
 	}
 
 	batch, err := s.clickhouse.PrepareBatch(ctx, `INSERT INTO logs (
+		id,
         timestamp, observed_timestamp,
         severity_number, severity_text, body,
         trace_id, span_id, trace_flags,
@@ -65,6 +66,7 @@ func (s *LogSink) writeBatch(ctx context.Context, records []models.LogRecord) er
 
 	for _, r := range records {
 		if err := batch.Append(
+			r.ID,
 			r.Timestamp, r.ObservedTimestamp,
 			r.SeverityNumber, r.SeverityText, r.Body,
 			r.TraceID, r.SpanID, r.TraceFlags,

@@ -1,4 +1,7 @@
+include .env
+
 PG_MIGRATIONS_DIR := internal/infra/postgres/migrations
+CH_MIGRATIONS_DIR := internal/infra/clickhouse/migrations
 
 # Development
 dev:
@@ -16,12 +19,14 @@ endif
 	@goose -dir $(PG_MIGRATIONS_DIR) create $(NAME) sql
 	@echo "Migration created: $(PG_MIGRATIONS_DIR)/$(NAME)"
 
-migrate:
-	@goose -dir $(PG_MIGRATIONS_DIR) postgres "$$DATABASE_URL" up
+migrate-postgres:
+	@goose -dir $(PG_MIGRATIONS_DIR) postgres "${POSTGRES_URL}" up
 
 migrate-down:
-	@goose -dir $(PG_MIGRATIONS_DIR) postgres "$$DATABASE_URL" down
+	@goose -dir $(PG_MIGRATIONS_DIR) postgres "${POSTGRES_URL}" down
 
+migrate-clickhouse:
+	@goose -dir $(CH_MIGRATIONS_DIR) clickhouse "clickhouse://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@${CLICKHOUSE_ADDRESS}/${CLICKHOUSE_DATABASE}" up
 
 gen-openapi:
 	go run ./cmd/openapi > openapi.yaml

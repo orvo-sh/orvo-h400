@@ -13,12 +13,13 @@ import (
 	"github.com/orvo-sh/orvo/internal/infra/postgres/db"
 	"github.com/orvo-sh/orvo/pkg/apperr"
 	"github.com/orvo-sh/orvo/pkg/pgutil"
+	"github.com/orvo-sh/orvo/pkg/sensitive"
 	"github.com/orvo-sh/orvo/pkg/util"
 )
 
 type RegisterInput struct {
 	Email                string
-	Password             string
+	Password             sensitive.Sensitive[string]
 	Name                 string
 	IpAddress            *string
 	UserAgent            *string
@@ -38,14 +39,14 @@ func (s *service) Register(ctx context.Context, input RegisterInput) (*models.Se
 			Name:          input.Name,
 		})
 		if err != nil {
-			if pgutil.IsUniqueViolationError(err, []string{"email"}) {
+			if pgutil.IsUniqueViolationError(err, "users_email_key") {
 				return errs.ErrEmailAlreadyExists
 			}
 			s.logger.ErrorContext(ctx, "Register: failed to create user", slog.Any("error", err))
 			return errs.ErrInternal
 		}
 
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password.Value()), bcrypt.DefaultCost)
 		if err != nil {
 			s.logger.ErrorContext(ctx, "Register: failed to hash password", slog.Any("error", err))
 			return errs.ErrInternal

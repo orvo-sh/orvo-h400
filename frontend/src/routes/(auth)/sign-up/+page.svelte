@@ -4,12 +4,16 @@
 
 	import { IconBrandGoogle } from '@tabler/icons-svelte';
 
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Logo } from '$lib/components/ui/logo';
+	import { register } from '$lib/api/endpoints/auth/auth';
 	import { superForm } from 'sveltekit-superforms';
 	import { zodClient } from 'sveltekit-superforms/adapters';
+
+	let error = $state('');
 
 	const form = superForm(
 		{
@@ -26,7 +30,26 @@
 					password: z.string().min(8)
 				})
 			),
-			onSubmit: async (formData) => {}
+			onSubmit: async () => {
+				error = '';
+			},
+			onResult: async () => {
+				const data = $formData;
+				try {
+					const res = await register({
+						name: data.name,
+						email: data.email,
+						password: data.password
+					});
+					if (res.status === 204) {
+						goto('/logs');
+					} else {
+						error = (res.data as any)?.detail ?? 'Registration failed';
+					}
+				} catch (e) {
+					error = 'An unexpected error occurred';
+				}
+			}
 		}
 	);
 
@@ -39,7 +62,7 @@
 	<div class="flex-center z-10 flex flex-col p-3 sm:p-4">
 		<div class="text-foreground mb-4 flex items-center gap-2 text-xl font-bold tracking-tight">
 			<Logo class="h-10 w-10" />
-			<span class="mb-0.5 lg:block"> Panelist </span>
+			<span class="mb-0.5 lg:block"> Orvo </span>
 		</div>
 
 		<div
@@ -47,10 +70,14 @@
 		>
 			<div class="flex flex-col items-center space-y-0 text-center">
 				<h1 class="text-foreground text-xl font-semibold tracking-tight">
-					Get started with Panelist
+					Get started with Orvo
 				</h1>
 				<p class="text-muted-foreground text-sm">continue with your email address or Google.</p>
 			</div>
+
+			{#if error}
+				<div class="text-destructive bg-destructive/10 rounded-md px-3 py-2 text-sm">{error}</div>
+			{/if}
 
 			<form method="POST" use:form.enhance>
 				{#each ['name', 'email', 'password'] as const as f}
@@ -68,7 +95,7 @@
 					</Form.Field>
 				{/each}
 
-				<Form.Button class="w-full">Submit</Form.Button>
+				<Form.Button class="w-full">Sign up</Form.Button>
 			</form>
 
 			<div class="relative">

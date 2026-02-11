@@ -1,48 +1,42 @@
 <script lang="ts">
+	import type { LogRecord } from '$lib/api/model';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import ColumnsIcon from '@lucide/svelte/icons/columns-3';
-	import RowsIcon from '@lucide/svelte/icons/rows-3';
-	import PlayIcon from '@lucide/svelte/icons/play';
 	import PauseIcon from '@lucide/svelte/icons/pause';
-	import CopyIcon from '@lucide/svelte/icons/copy';
-	import LinkIcon from '@lucide/svelte/icons/link';
-	import ClockIcon from '@lucide/svelte/icons/clock';
+	import PlayIcon from '@lucide/svelte/icons/play';
+	import RowsIcon from '@lucide/svelte/icons/rows-3';
 	import LogEntry from './log-entry.svelte';
-	import type { LogEntry as LogEntryType } from './mock-data';
 
 	let {
 		logs,
 		isLive = false,
-		onToggleLive = () => {}
+		onToggleLive = () => {},
+		onLoadMore = undefined,
+		hasMore = false,
+		loading = false
 	}: {
-		logs: LogEntryType[];
+		logs: LogRecord[];
 		isLive?: boolean;
 		onToggleLive?: () => void;
+		onLoadMore?: (() => void) | undefined;
+		hasMore?: boolean;
+		loading?: boolean;
 	} = $props();
 
-	let expandedIds = $state<Set<string>>(new Set());
+	let expandedTimestamps = $state<Set<string>>(new Set());
 	let columnsVisible = $state(5);
 	let totalColumns = $state(5);
 	let rowHeight = $state<'compact' | 'default' | 'expanded'>('default');
 
-	function toggleExpanded(id: string) {
-		const newSet = new Set(expandedIds);
-		if (newSet.has(id)) {
-			newSet.delete(id);
+	function toggleExpanded(timestamp: string) {
+		const newSet = new Set(expandedTimestamps);
+		if (newSet.has(timestamp)) {
+			newSet.delete(timestamp);
 		} else {
-			newSet.add(id);
+			newSet.add(timestamp);
 		}
-		expandedIds = newSet;
-	}
-
-	function copyAsJson(log: LogEntryType) {
-		navigator.clipboard.writeText(JSON.stringify(log, null, 2));
-	}
-
-	function copyLink(log: LogEntryType) {
-		const url = `${window.location.origin}/logs?id=${log.id}`;
-		navigator.clipboard.writeText(url);
+		expandedTimestamps = newSet;
 	}
 </script>
 
@@ -58,11 +52,22 @@
 				{#each logs as log (log.id)}
 					<LogEntry
 						{log}
-						expanded={expandedIds.has(log.id)}
-						onToggle={() => toggleExpanded(log.id)}
+						expanded={expandedTimestamps.has(log.timestamp)}
+						onToggle={() => toggleExpanded(log.timestamp)}
 					/>
 				{/each}
 			</div>
+			{#if hasMore && onLoadMore}
+				<div class="flex justify-center border-t py-3">
+					<Button variant="outline" size="sm" onclick={onLoadMore} disabled={loading}>
+						{#if loading}
+							Loading...
+						{:else}
+							Load more
+						{/if}
+					</Button>
+				</div>
+			{/if}
 		{/if}
 	</div>
 

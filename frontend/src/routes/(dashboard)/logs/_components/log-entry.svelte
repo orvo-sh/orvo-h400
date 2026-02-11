@@ -6,14 +6,16 @@
 	import CopyIcon from '@lucide/svelte/icons/copy';
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import ClockIcon from '@lucide/svelte/icons/clock';
-	import type { LogEntry, LogLevel } from './mock-data';
+	import type { LogRecord } from '$lib/api/model';
 
-	function copyAsJson(log: LogEntry) {
+	type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+
+	function copyAsJson(log: LogRecord) {
 		navigator.clipboard.writeText(JSON.stringify(log, null, 2));
 	}
 
-	function copyLink(log: LogEntry) {
-		const url = `${window.location.origin}/logs?id=${log.id}`;
+	function copyLink(log: LogRecord) {
+		const url = `${window.location.origin}/logs?ts=${encodeURIComponent(log.timestamp)}`;
 		navigator.clipboard.writeText(url);
 	}
 
@@ -22,7 +24,7 @@
 		expanded = false,
 		onToggle = () => {}
 	}: {
-		log: LogEntry;
+		log: LogRecord;
 		expanded?: boolean;
 		onToggle?: () => void;
 	} = $props();
@@ -44,6 +46,16 @@
 			hour12: false
 		});
 		return `${dateStr} ${timeStr}`;
+	}
+
+	function getSeverityLevel(severityText: string): LogLevel {
+		const s = severityText.toLowerCase();
+		if (s === 'debug' || s === 'trace') return 'debug';
+		if (s === 'info') return 'info';
+		if (s === 'warn' || s === 'warning') return 'warn';
+		if (s === 'error') return 'error';
+		if (s === 'fatal') return 'fatal';
+		return 'info';
 	}
 
 	function getLevelColor(level: LogLevel): string {
@@ -79,6 +91,30 @@
 				return '';
 		}
 	}
+
+	const level = $derived(getSeverityLevel(log.severity_text));
+	const host = $derived(log.resource_attributes?.['host.name'] ?? '');
+
+	// Merge all attributes for expanded view
+	const allAttributes = $derived.by(() => {
+		const attrs: Record<string, string> = {};
+		if (log.resource_attributes) {
+			for (const [k, v] of Object.entries(log.resource_attributes)) {
+				attrs[`resource.${k}`] = v;
+			}
+		}
+		if (log.scope_attributes) {
+			for (const [k, v] of Object.entries(log.scope_attributes)) {
+				attrs[`scope.${k}`] = v;
+			}
+		}
+		if (log.log_attributes) {
+			for (const [k, v] of Object.entries(log.log_attributes)) {
+				attrs[k] = v;
+			}
+		}
+		return attrs;
+	});
 </script>
 
 <div class="font-mono text-sm">
@@ -100,23 +136,19 @@
 		<div class="min-w-0 flex-1">
 			<span class="text-muted-foreground">{formatTimestamp(log.timestamp)}</span>
 			{' '}
-			<span class="text-cyan-600">[{log.service}]</span>
+			<span class="text-cyan-600">[{log.service_name}]</span>
 			{' '}
-			<span class="text-purple-600">[{log.host}]</span>
-			{' '}
-			<span class={getLevelColor(log.level)}>[{log.level.toUpperCase()}]</span>
-			{#if log.group}
+			{#if host}
+				<span class="text-purple-600">[{host}]</span>
 				{' '}
-				<span class="text-orange-600">[{log.group}]</span>
 			{/if}
-			{#if log.tags && log.tags.length > 0}
-				{#each log.tags as tag (tag)}
-					{' '}
-					<span class="text-green-600">[{tag}]</span>
-				{/each}
+			<span class={getLevelColor(level)}>[{log.severity_text}]</span>
+			{#if log.scope_name}
+				{' '}
+				<span class="text-orange-600">[{log.scope_name}]</span>
 			{/if}
 			{' '}
-			<span class="text-foreground">{log.message}</span>
+			<span class="text-foreground">{log.body}</span>
 		</div>
 	</button>
 
@@ -130,43 +162,57 @@
 						<td class="px-4 py-2">{log.timestamp}</td>
 					</tr>
 					<tr class="border-b">
-						<td class="px-4 py-2 font-medium text-muted-foreground">source</td>
-						<td class="px-4 py-2">{log.source}</td>
-					</tr>
-					<tr class="border-b">
 						<td class="px-4 py-2 font-medium text-muted-foreground">service</td>
-						<td class="px-4 py-2">{log.service}</td>
+						<td class="px-4 py-2">{log.service_name}</td>
 					</tr>
-					<tr class="border-b">
-						<td class="px-4 py-2 font-medium text-muted-foreground">host</td>
-						<td class="px-4 py-2">{log.host}</td>
-					</tr>
-					<tr class="border-b">
-						<td class="px-4 py-2 font-medium text-muted-foreground">level</td>
-						<td class="px-4 py-2">
-							<Badge variant="outline" class={getLevelBgColor(log.level)}>
-								{log.level.toUpperCase()}
-							</Badge>
-						</td>
-					</tr>
-					{#if log.group}
+					{#if host}
 						<tr class="border-b">
-							<td class="px-4 py-2 font-medium text-muted-foreground">group</td>
-							<td class="px-4 py-2">{log.group}</td>
+							<td class="px-4 py-2 font-medium text-muted-foreground">host</td>
+							<td class="px-4 py-2">{host}</td>
 						</tr>
 					{/if}
 					<tr class="border-b">
-						<td class="px-4 py-2 font-medium text-muted-foreground">message</td>
-						<td class="px-4 py-2">{log.message}</td>
+						<td class="px-4 py-2 font-medium text-muted-foreground">severity</td>
+						<td class="px-4 py-2">
+							<Badge variant="outline" class={getLevelBgColor(level)}>
+								{log.severity_text}
+							</Badge>
+						</td>
 					</tr>
-					{#if log.metadata}
-						{#each Object.entries(log.metadata) as [key, value] (key)}
-							<tr class="border-b last:border-b-0">
-								<td class="px-4 py-2 font-medium text-muted-foreground">{key}</td>
-								<td class="px-4 py-2">{value}</td>
-							</tr>
-						{/each}
+					{#if log.deployment_environment}
+						<tr class="border-b">
+							<td class="px-4 py-2 font-medium text-muted-foreground">environment</td>
+							<td class="px-4 py-2">{log.deployment_environment}</td>
+						</tr>
 					{/if}
+					{#if log.scope_name}
+						<tr class="border-b">
+							<td class="px-4 py-2 font-medium text-muted-foreground">scope</td>
+							<td class="px-4 py-2">{log.scope_name}</td>
+						</tr>
+					{/if}
+					{#if log.trace_id}
+						<tr class="border-b">
+							<td class="px-4 py-2 font-medium text-muted-foreground">trace_id</td>
+							<td class="px-4 py-2 font-mono text-xs">{log.trace_id}</td>
+						</tr>
+					{/if}
+					{#if log.span_id}
+						<tr class="border-b">
+							<td class="px-4 py-2 font-medium text-muted-foreground">span_id</td>
+							<td class="px-4 py-2 font-mono text-xs">{log.span_id}</td>
+						</tr>
+					{/if}
+					<tr class="border-b">
+						<td class="px-4 py-2 font-medium text-muted-foreground">body</td>
+						<td class="px-4 py-2">{log.body}</td>
+					</tr>
+					{#each Object.entries(allAttributes) as [key, value] (key)}
+						<tr class="border-b last:border-b-0">
+							<td class="px-4 py-2 font-medium text-muted-foreground">{key}</td>
+							<td class="px-4 py-2">{value}</td>
+						</tr>
+					{/each}
 				</tbody>
 			</table>
 			<!-- Action buttons -->

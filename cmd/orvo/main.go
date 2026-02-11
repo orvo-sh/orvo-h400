@@ -11,15 +11,16 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
-	"github.com/lmittmann/tint"
 	"github.com/orvo-sh/orvo/internal/config"
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
+	"github.com/orvo-sh/orvo/internal/domain/services/logservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/organizationservice"
 	"github.com/orvo-sh/orvo/internal/http/handlers"
 	"github.com/orvo-sh/orvo/internal/http/middleware/authmiddleware"
 	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
 	"github.com/orvo-sh/orvo/internal/infra/postgres"
 	"github.com/orvo-sh/orvo/internal/infra/redis"
+	"github.com/orvo-sh/orvo/internal/logger"
 	"github.com/orvo-sh/orvo/pkg/background"
 	"github.com/orvo-sh/orvo/pkg/util"
 )
@@ -30,10 +31,20 @@ func main() {
 
 	cfg := util.Must(config.Load())
 
-	logger := slog.New(tint.NewHandler(os.Stdout, &tint.Options{})).With(
-		slog.String("service", "app"),
-		slog.String("environment", cfg.App.Environment),
-	)
+	if cfg.Otel.ApiKey == "" {
+		cfg.Otel.ApiKey = "CGIGs8wiB9DRO6fARVIRlhES4ZtNhSVa0_GxsA-fj61h8fxuKUtGZFaTIChfzsId"
+	}
+
+	logger, cleanup, err := logger.New(ctx, logger.Config{
+		ServiceName:  "orvo-app",
+		Environment:  cfg.App.Environment,
+		OTLPEndpoint: cfg.Otel.Endpoint,
+		APIKey:       cfg.Otel.ApiKey,
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer cleanup()
 
 	postgres := util.Must(postgres.New(ctx, postgres.Config{
 		URL: cfg.Postgres.URL,
@@ -69,6 +80,7 @@ func main() {
 	organizationService := organizationservice.New(postgres, logger, organizationservice.Config{
 		MaxOrganizationsPerUser: 10,
 	})
+	logService := logservice.New(clickhouse, logger)
 
 	handlers.FrontendHandler(r)
 	r.With(
@@ -98,12 +110,14 @@ func main() {
 
 			handlers.NewAuthHandler(authService, handlers.NewAuthConfig{
 				SessionCookieKey:       "orvo_sess",
-				SessionCookieDomain:    "localhost:8080",
+				SessionCookieDomain:    "",
 				SessionCookieSecure:    false,
+				SessionCookieSameSite:  http.SameSiteLaxMode,
 				SessionCookieExpiresIn: 7 * 24 * time.Hour,
 			}).RegisterRoutes(api)
 			handlers.NewOrganizationHandler(organizationService, authService).RegisterRoutes(api)
 			handlers.NewApiKeyHandler(authService).RegisterRoutes(api)
+			handlers.NewLogHandler(logService, authService).RegisterRoutes(api)
 
 			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)

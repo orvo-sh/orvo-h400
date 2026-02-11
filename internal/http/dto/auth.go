@@ -23,7 +23,7 @@ type LoginInput struct {
 }
 
 type SessionOutput struct {
-	SetCookie http.Cookie `header:"Set-Cookie"`
+	SetCookie []http.Cookie `header:"Set-Cookie"`
 }
 
 type GetSessionOutput struct {

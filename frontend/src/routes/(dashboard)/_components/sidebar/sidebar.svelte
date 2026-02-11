@@ -1,60 +1,16 @@
 <script lang="ts" module>
-	import AudioWaveformIcon from '@lucide/svelte/icons/audio-waveform';
-	import ChartPieIcon from '@lucide/svelte/icons/chart-pie';
-	import CommandIcon from '@lucide/svelte/icons/command';
-	import FrameIcon from '@lucide/svelte/icons/frame';
 	import GalleryVerticalEndIcon from '@lucide/svelte/icons/gallery-vertical-end';
-	import MapIcon from '@lucide/svelte/icons/map';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
 
 	import { IconLogs } from '@tabler/icons-svelte';
-
-	const data = {
-		user: {
-			name: 'shadcn',
-			email: 'm@example.com',
-			avatar: '/avatars/shadcn.jpg'
-		},
-		teams: [
-			{
-				name: 'Acme Inc',
-				logo: GalleryVerticalEndIcon,
-				plan: 'Enterprise'
-			},
-			{
-				name: 'Acme Corp.',
-				logo: AudioWaveformIcon,
-				plan: 'Startup'
-			},
-			{
-				name: 'Evil Corp.',
-				logo: CommandIcon,
-				plan: 'Free'
-			}
-		],
-		navMain: [],
-		projects: [
-			{
-				name: 'Design Engineering',
-				url: '#',
-				icon: FrameIcon
-			},
-			{
-				name: 'Sales & Marketing',
-				url: '#',
-				icon: ChartPieIcon
-			},
-			{
-				name: 'Travel',
-				url: '#',
-				icon: MapIcon
-			}
-		]
-	};
 </script>
 
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { logout } from '$lib/api/endpoints/auth/auth';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import { sessionStore } from '$lib/stores/session';
 	import type { ComponentProps } from 'svelte';
 	import SidebarNavMain from './sidebar-nav-main.svelte';
 	import SidebarNavUser from './sidebar-nav-user.svelte';
@@ -64,11 +20,41 @@
 		collapsible = 'icon',
 		...restProps
 	}: ComponentProps<typeof Sidebar.Root> = $props();
+
+	const session = $derived($sessionStore);
+
+	const user = $derived(
+		session?.user
+			? {
+					name: session.user.name,
+					email: session.user.email,
+					avatar: ''
+				}
+			: { name: '', email: '', avatar: '' }
+	);
+
+	const teams = $derived(
+		session?.active_organization
+			? [
+					{
+						name: session.active_organization.name,
+						logo: GalleryVerticalEndIcon,
+						plan: 'Free'
+					}
+				]
+			: []
+	);
+
+	async function handleLogout() {
+		await logout();
+		sessionStore.set(null);
+		goto('/sign-in');
+	}
 </script>
 
 <Sidebar.Root {collapsible} {...restProps}>
 	<Sidebar.Header>
-		<SidebarTeamSwitcher teams={data.teams} />
+		<SidebarTeamSwitcher {teams} />
 	</Sidebar.Header>
 	<Sidebar.Content>
 		<SidebarNavMain
@@ -83,12 +69,21 @@
 						{ title: 'Saved Views', url: '/logs/views' },
 						{ title: 'Sources', url: '/logs/sources' }
 					]
+				},
+				{
+					title: 'Settings',
+					url: '/settings',
+					icon: SettingsIcon,
+					isActive: page.url.pathname.includes('/settings'),
+					items: [
+						{ title: 'API Keys', url: '/settings' }
+					]
 				}
 			]}
 		/>
 	</Sidebar.Content>
 	<Sidebar.Footer>
-		<SidebarNavUser user={data.user} />
+		<SidebarNavUser {user} onLogout={handleLogout} />
 	</Sidebar.Footer>
 	<Sidebar.Rail />
 </Sidebar.Root>
