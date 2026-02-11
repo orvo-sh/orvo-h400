@@ -30,7 +30,9 @@ CREATE INDEX idx_accounts_user_id ON accounts (user_id);
 CREATE TABLE organizations (
     id VARCHAR(32) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL UNIQUE,
     logo VARCHAR(512),
+    metadata JSONB DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

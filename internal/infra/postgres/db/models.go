@@ -18,6 +18,17 @@ type Account struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type ApiKey struct {
+	ID             string             `json:"id"`
+	OrganizationID string             `json:"organization_id"`
+	KeyHash        string             `json:"key_hash"`
+	Name           string             `json:"name"`
+	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
+}
+
 type Organization struct {
 	ID        string             `json:"id"`
 	Name      string             `json:"name"`

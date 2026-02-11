@@ -12,12 +12,14 @@ type Querier interface {
 	CheckSlugExists(ctx context.Context, slug string) (bool, error)
 	CountMembersByOrganizationID(ctx context.Context, organizationID string) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
+	CreateApiKey(ctx context.Context, arg CreateApiKeyParams) (ApiKey, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (OrganizationInvitation, error)
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
 	CreateOrganizationMember(ctx context.Context, arg CreateOrganizationMemberParams) (OrganizationMember, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteAccount(ctx context.Context, id string) error
+	DeleteApiKey(ctx context.Context, arg DeleteApiKeyParams) error
 	DeleteExpiredInvitations(ctx context.Context) error
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteInvitation(ctx context.Context, id string) error
@@ -30,6 +32,8 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id string) error
 	GetAccountByProvider(ctx context.Context, arg GetAccountByProviderParams) (Account, error)
 	GetAccountsByUserID(ctx context.Context, userID string) ([]Account, error)
+	GetApiKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
+	GetApiKeyByID(ctx context.Context, id string) (ApiKey, error)
 	GetInvitationByID(ctx context.Context, id string) (OrganizationInvitation, error)
 	GetMemberByID(ctx context.Context, id string) (OrganizationMember, error)
 	GetMemberByOrgAndUser(ctx context.Context, arg GetMemberByOrgAndUserParams) (OrganizationMember, error)
@@ -44,12 +48,15 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	GetUserOrganizationMemberships(ctx context.Context, userID string) ([]GetUserOrganizationMembershipsRow, error)
+	ListApiKeysByOrganizationID(ctx context.Context, organizationID string) ([]ApiKey, error)
 	ListInvitationsByOrganizationID(ctx context.Context, organizationID string) ([]ListInvitationsByOrganizationIDRow, error)
 	ListMembersByOrganizationID(ctx context.Context, arg ListMembersByOrganizationIDParams) ([]ListMembersByOrganizationIDRow, error)
 	ListOrganizationsByUserID(ctx context.Context, userID string) ([]Organization, error)
 	ListPendingInvitationsByEmail(ctx context.Context, email string) ([]ListPendingInvitationsByEmailRow, error)
+	RevokeApiKey(ctx context.Context, arg RevokeApiKeyParams) (ApiKey, error)
 	SetActiveOrganization(ctx context.Context, arg SetActiveOrganizationParams) (Session, error)
 	UpdateAccountPassword(ctx context.Context, arg UpdateAccountPasswordParams) error
+	UpdateApiKeyLastUsed(ctx context.Context, keyHash string) error
 	UpdateInvitationStatus(ctx context.Context, arg UpdateInvitationStatusParams) (OrganizationInvitation, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) (OrganizationMember, error)
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)

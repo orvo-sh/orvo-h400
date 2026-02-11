@@ -6,4 +6,5 @@ var (
 	ErrInternal             = apperr.New(500, "internal_error")
 	ErrBadRequest           = apperr.New(400, "bad_request")
 	ErrMissingAuthorization = apperr.New(401, "missing_authorization")
+	ErrApiKeyNotFound       = apperr.New(404, "api_key_not_found")
 )

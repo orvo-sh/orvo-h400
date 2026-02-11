@@ -4,23 +4,22 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/orvo-sh/orvo/internal/domain/models"
-	"github.com/orvo-sh/orvo/internal/infra/redis"
+	"github.com/orvo-sh/orvo/internal/sink"
 	"github.com/orvo-sh/orvo/pkg/apperr"
 )
 
 type Service interface {
-	IngestLogEvent(ctx context.Context, input IngestLogInput) (*models.LogEvent, apperr.Error)
+	IngestLogs(ctx context.Context, input IngestLogsInput) apperr.Error
 }
 
 type service struct {
-	redisClient *redis.Client
-
+	sink   *sink.LogSink
 	logger *slog.Logger
 }
 
-func New(logger *slog.Logger, redisClient *redis.Client) Service {
+func New(sink *sink.LogSink, logger *slog.Logger) Service {
 	return &service{
-		redisClient: redisClient,
+		sink:   sink,
+		logger: logger,
 	}
 }

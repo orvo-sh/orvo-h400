@@ -20,43 +20,51 @@ import (
 	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
 	"github.com/orvo-sh/orvo/internal/infra/postgres"
 	"github.com/orvo-sh/orvo/internal/infra/redis"
+	"github.com/orvo-sh/orvo/pkg/background"
 	"github.com/orvo-sh/orvo/pkg/util"
 )
 
 func main() {
-	ctx := context.Background()
-	config := util.Must(config.Load())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := util.Must(config.Load())
 
 	logger := slog.New(tint.NewHandler(os.Stdout, &tint.Options{})).With(
 		slog.String("service", "app"),
-		slog.String("environment", config.App.Environment),
+		slog.String("environment", cfg.App.Environment),
 	)
 
 	postgres := util.Must(postgres.New(ctx, postgres.Config{
-		URL: config.Postgres.URL,
+		URL: cfg.Postgres.URL,
 	}))
 	defer postgres.Close()
 
 	clickhouse := util.Must(clickhouse.New(ctx, clickhouse.Config{
-		Address:  config.Clickhouse.Address,
-		Database: config.Clickhouse.Database,
-		User:     config.Clickhouse.User,
-		Password: config.Clickhouse.Password,
+		Address:  cfg.Clickhouse.Address,
+		Database: cfg.Clickhouse.Database,
+		User:     cfg.Clickhouse.User,
+		Password: cfg.Clickhouse.Password,
 	}))
 	defer clickhouse.Close()
 
 	redis := util.Must(redis.New(ctx, redis.Config{
-		Address:  config.Redis.Address,
-		Password: config.Redis.Password,
-		DB:       config.Redis.DB,
+		Address:  cfg.Redis.Address,
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
 	}))
 	defer redis.Close()
 
 	r := chi.NewRouter()
 
-	authService := authservice.New(postgres, logger, authservice.Config{
-		SessionExpiresIn: 7 * 24 * time.Hour,
-		SessionUpdateAge: 24 * time.Hour,
+	backgroundManager := background.New(logger, background.Config{
+		DefaultTimeout: 30 * time.Second,
+	})
+
+	authService := authservice.New(postgres, logger, backgroundManager, authservice.Config{
+		SessionExpiresIn:       7 * 24 * time.Hour,
+		SessionUpdateAge:       24 * time.Hour,
+		ApiKeyCacheResolverTTL: 60 * time.Second,
 	})
 	organizationService := organizationservice.New(postgres, logger, organizationservice.Config{
 		MaxOrganizationsPerUser: 10,
@@ -95,14 +103,15 @@ func main() {
 				SessionCookieExpiresIn: 7 * 24 * time.Hour,
 			}).RegisterRoutes(api)
 			handlers.NewOrganizationHandler(organizationService, authService).RegisterRoutes(api)
+			handlers.NewApiKeyHandler(authService).RegisterRoutes(api)
 
 			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
 			})
 		})
 
-	logger.Info("starting server on port " + config.App.AppPort)
-	if err := http.ListenAndServe(":"+config.App.AppPort, r); err != nil && err != http.ErrServerClosed {
+	logger.Info("starting server on port " + cfg.App.AppPort)
+	if err := http.ListenAndServe(":"+cfg.App.AppPort, r); err != nil && err != http.ErrServerClosed {
 		logger.Error("server error", slog.Any("error", err))
 		os.Exit(1)
 	}

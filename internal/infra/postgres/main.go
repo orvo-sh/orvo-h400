@@ -37,6 +37,10 @@ func New(ctx context.Context, config Config) (*DB, error) {
 	}, nil
 }
 
+func (d *DB) Pool() *pgxpool.Pool {
+	return d.pool
+}
+
 func (d *DB) Close() {
 	d.pool.Close()
 }
