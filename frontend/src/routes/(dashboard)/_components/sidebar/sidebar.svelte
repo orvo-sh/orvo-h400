@@ -2,7 +2,7 @@
 	import GalleryVerticalEndIcon from '@lucide/svelte/icons/gallery-vertical-end';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 
-	import { IconLogs } from '@tabler/icons-svelte';
+	import { IconLogs, IconRoute } from '@tabler/icons-svelte';
 </script>
 
 <script lang="ts">
@@ -68,6 +68,17 @@
 						{ title: 'All Logs', url: '/logs' },
 						{ title: 'Saved Views', url: '/logs/views' },
 						{ title: 'Sources', url: '/logs/sources' }
+					]
+				},
+				{
+					title: 'Traces',
+					url: '/traces',
+					icon: IconRoute,
+					isActive: page.url.pathname.includes('/traces'),
+					items: [
+						{ title: 'All Traces', url: '/traces' },
+						{ title: 'Service Map', url: '/traces/service-map' },
+						{ title: 'Sources', url: '/traces/sources' }
 					]
 				},
 				{

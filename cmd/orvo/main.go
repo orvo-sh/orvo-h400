@@ -15,14 +15,17 @@ import (
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/logservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/organizationservice"
+	"github.com/orvo-sh/orvo/internal/domain/services/traceservice"
 	"github.com/orvo-sh/orvo/internal/http/handlers"
 	"github.com/orvo-sh/orvo/internal/http/middleware/authmiddleware"
 	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
 	"github.com/orvo-sh/orvo/internal/infra/postgres"
 	"github.com/orvo-sh/orvo/internal/infra/redis"
 	"github.com/orvo-sh/orvo/internal/logger"
+	appotel "github.com/orvo-sh/orvo/internal/otel"
 	"github.com/orvo-sh/orvo/pkg/background"
 	"github.com/orvo-sh/orvo/pkg/util"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func main() {
@@ -35,11 +38,24 @@ func main() {
 		cfg.Otel.ApiKey = "CGIGs8wiB9DRO6fARVIRlhES4ZtNhSVa0_GxsA-fj61h8fxuKUtGZFaTIChfzsId"
 	}
 
+	// Initialize OpenTelemetry tracing (TracerProvider + OTLP exporter).
+	otelShutdown, otelRes, err := appotel.Init(ctx, appotel.Config{
+		ServiceName:  "orvo-app",
+		Environment:  cfg.App.Environment,
+		OTLPEndpoint: cfg.Otel.Endpoint,
+		APIKey:       cfg.Otel.ApiKey,
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer otelShutdown()
+
 	logger, cleanup, err := logger.New(ctx, logger.Config{
 		ServiceName:  "orvo-app",
 		Environment:  cfg.App.Environment,
 		OTLPEndpoint: cfg.Otel.Endpoint,
 		APIKey:       cfg.Otel.ApiKey,
+		Resource:     otelRes,
 	})
 	if err != nil {
 		panic(err)
@@ -68,6 +84,11 @@ func main() {
 
 	r := chi.NewRouter()
 
+	// OpenTelemetry HTTP middleware — creates a span for every request.
+	r.Use(func(next http.Handler) http.Handler {
+		return otelhttp.NewHandler(next, "http.request")
+	})
+
 	backgroundManager := background.New(logger, background.Config{
 		DefaultTimeout: 30 * time.Second,
 	})
@@ -81,6 +102,7 @@ func main() {
 		MaxOrganizationsPerUser: 10,
 	})
 	logService := logservice.New(clickhouse, logger)
+	traceService := traceservice.New(clickhouse, logger)
 
 	handlers.FrontendHandler(r)
 	r.With(
@@ -118,6 +140,7 @@ func main() {
 			handlers.NewOrganizationHandler(organizationService, authService).RegisterRoutes(api)
 			handlers.NewApiKeyHandler(authService).RegisterRoutes(api)
 			handlers.NewLogHandler(logService, authService).RegisterRoutes(api)
+			handlers.NewTraceHandler(traceService, authService).RegisterRoutes(api)
 
 			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)

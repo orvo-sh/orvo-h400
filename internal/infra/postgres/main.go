@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/orvo-sh/orvo/internal/infra/postgres/db"
@@ -22,7 +23,14 @@ type Config struct {
 }
 
 func New(ctx context.Context, config Config) (*DB, error) {
-	pool, err := pgxpool.New(ctx, config.URL)
+	pgxCfg, err := pgxpool.ParseConfig(config.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse connection string: %w", err)
+	}
+
+	pgxCfg.ConnConfig.Tracer = otelpgx.NewTracer()
+
+	pool, err := pgxpool.NewWithConfig(ctx, pgxCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}

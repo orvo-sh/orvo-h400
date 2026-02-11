@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -19,10 +20,14 @@ import (
 	"github.com/orvo-sh/orvo/internal/domain/services/ingestservice"
 	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
 	"github.com/orvo-sh/orvo/internal/infra/postgres"
+	appotel "github.com/orvo-sh/orvo/internal/otel"
 	"github.com/orvo-sh/orvo/internal/sink"
 	"github.com/orvo-sh/orvo/pkg/background"
 	"github.com/orvo-sh/orvo/pkg/util"
-	collectorpb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	collectorlogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	collectortracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -35,6 +40,22 @@ func main() {
 	defer cancel()
 
 	cfg := util.Must(config.Load())
+
+	if cfg.Otel.ApiKey == "" {
+		cfg.Otel.ApiKey = "CGIGs8wiB9DRO6fARVIRlhES4ZtNhSVa0_GxsA-fj61h8fxuKUtGZFaTIChfzsId"
+	}
+
+	// Initialize OpenTelemetry tracing (TracerProvider + OTLP exporter).
+	otelShutdown, _, err := appotel.Init(ctx, appotel.Config{
+		ServiceName:  "orvo-ingest",
+		Environment:  cfg.App.Environment,
+		OTLPEndpoint: cfg.Otel.Endpoint,
+		APIKey:       cfg.Otel.ApiKey,
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer otelShutdown()
 
 	logger := slog.New(tint.NewHandler(os.Stdout, &tint.Options{})).With(
 		slog.String("service", "ingest"),
@@ -66,12 +87,20 @@ func main() {
 	})
 
 	logSink := sink.NewLogSink(ch, logger)
+	spanSink := sink.NewSpanSink(ch, logger)
 
-	ingestService := ingestservice.New(logSink, logger)
+	ingestService := ingestservice.New(logSink, spanSink, logger)
 
 	// OTLP/gRPC receiver (:4317).
-	grpcServer := grpc.NewServer()
-	collectorpb.RegisterLogsServiceServer(grpcServer, &grpcHandler{
+	grpcServer := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
+	collectorlogspb.RegisterLogsServiceServer(grpcServer, &grpcLogHandler{
+		authService:   authService,
+		ingestService: ingestService,
+		logger:        logger,
+	})
+	collectortracepb.RegisterTraceServiceServer(grpcServer, &grpcTraceHandler{
 		authService:   authService,
 		ingestService: ingestService,
 		logger:        logger,
@@ -87,19 +116,25 @@ func main() {
 
 	// OTLP/HTTP receiver (:4318).
 	httpMux := http.NewServeMux()
-	httpHandler := &httpLogHandler{
+	httpLogH := &httpLogHandler{
 		authService:   authService,
 		ingestService: ingestService,
 		logger:        logger,
 	}
-	httpMux.Handle("/v1/logs", httpHandler)
+	httpTraceH := &httpTraceHandler{
+		authService:   authService,
+		ingestService: ingestService,
+		logger:        logger,
+	}
+	httpMux.Handle("/v1/logs", httpLogH)
+	httpMux.Handle("/v1/traces", httpTraceH)
 	httpMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))
 	})
 
 	httpServer := &http.Server{
 		Addr:    ":4318",
-		Handler: httpMux,
+		Handler: otelhttp.NewHandler(httpMux, "ingest.http"),
 	}
 	go func() {
 		logger.Info("OTLP/HTTP receiver listening on :4318")
@@ -123,6 +158,9 @@ func main() {
 	if err := logSink.Close(); err != nil {
 		logger.Error("failed to close log sink", slog.Any("error", err))
 	}
+	if err := spanSink.Close(); err != nil {
+		logger.Error("failed to close span sink", slog.Any("error", err))
+	}
 
 	logger.Info("ingest service stopped")
 }
@@ -138,19 +176,11 @@ func extractApiKey(authorization string, apiKeyHeader string) string {
 	return ""
 }
 
-// --- gRPC handler ---
-
-type grpcHandler struct {
-	collectorpb.UnimplementedLogsServiceServer
-	authService   authservice.Service
-	ingestService ingestservice.Service
-	logger        *slog.Logger
-}
-
-func (h *grpcHandler) Export(ctx context.Context, req *collectorpb.ExportLogsServiceRequest) (*collectorpb.ExportLogsServiceResponse, error) {
+// resolveOrgFromGRPC extracts the API key from gRPC metadata and resolves the organization ID.
+func resolveOrgFromGRPC(ctx context.Context, authService authservice.Service) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "missing metadata")
+		return "", status.Error(codes.Unauthenticated, "missing metadata")
 	}
 
 	var rawKey string
@@ -163,25 +193,81 @@ func (h *grpcHandler) Export(ctx context.Context, req *collectorpb.ExportLogsSer
 		}
 	}
 	if rawKey == "" {
-		return nil, status.Error(codes.Unauthenticated, "missing API key")
+		return "", status.Error(codes.Unauthenticated, "missing API key")
 	}
 
-	orgID, appErr := h.authService.ResolveApiKey(ctx, rawKey)
+	orgID, appErr := authService.ResolveApiKey(ctx, rawKey)
 	if appErr != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid API key")
+		return "", status.Error(codes.Unauthenticated, "invalid API key")
+	}
+	return *orgID, nil
+}
+
+// resolveOrgFromHTTP extracts the API key from HTTP headers and resolves the organization ID.
+func resolveOrgFromHTTP(r *http.Request, authService authservice.Service) (string, error) {
+	rawKey := extractApiKey(r.Header.Get("Authorization"), r.Header.Get("X-Api-Key"))
+	if rawKey == "" {
+		return "", fmt.Errorf("missing API key")
 	}
 
-	if err := h.ingestService.IngestLogs(ctx, ingestservice.IngestLogsInput{
-		OrganizationID: *orgID,
+	orgID, appErr := authService.ResolveApiKey(r.Context(), rawKey)
+	if appErr != nil {
+		return "", fmt.Errorf("invalid API key")
+	}
+	return *orgID, nil
+}
+
+// --- gRPC Log handler ---
+
+type grpcLogHandler struct {
+	collectorlogspb.UnimplementedLogsServiceServer
+	authService   authservice.Service
+	ingestService ingestservice.Service
+	logger        *slog.Logger
+}
+
+func (h *grpcLogHandler) Export(ctx context.Context, req *collectorlogspb.ExportLogsServiceRequest) (*collectorlogspb.ExportLogsServiceResponse, error) {
+	orgID, err := resolveOrgFromGRPC(ctx, h.authService)
+	if err != nil {
+		return nil, err
+	}
+
+	if ingestErr := h.ingestService.IngestLogs(ctx, ingestservice.IngestLogsInput{
+		OrganizationID: orgID,
 		ResourceLogs:   req.GetResourceLogs(),
-	}); err != nil {
+	}); ingestErr != nil {
 		return nil, status.Error(codes.Internal, "failed to ingest logs")
 	}
 
-	return &collectorpb.ExportLogsServiceResponse{}, nil
+	return &collectorlogspb.ExportLogsServiceResponse{}, nil
 }
 
-// --- HTTP handler ---
+// --- gRPC Trace handler ---
+
+type grpcTraceHandler struct {
+	collectortracepb.UnimplementedTraceServiceServer
+	authService   authservice.Service
+	ingestService ingestservice.Service
+	logger        *slog.Logger
+}
+
+func (h *grpcTraceHandler) Export(ctx context.Context, req *collectortracepb.ExportTraceServiceRequest) (*collectortracepb.ExportTraceServiceResponse, error) {
+	orgID, err := resolveOrgFromGRPC(ctx, h.authService)
+	if err != nil {
+		return nil, err
+	}
+
+	if ingestErr := h.ingestService.IngestTraces(ctx, ingestservice.IngestTracesInput{
+		OrganizationID: orgID,
+		ResourceSpans:  req.GetResourceSpans(),
+	}); ingestErr != nil {
+		return nil, status.Error(codes.Internal, "failed to ingest traces")
+	}
+
+	return &collectortracepb.ExportTraceServiceResponse{}, nil
+}
+
+// --- HTTP Log handler ---
 
 type httpLogHandler struct {
 	authService   authservice.Service
@@ -195,15 +281,9 @@ func (h *httpLogHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawKey := extractApiKey(r.Header.Get("Authorization"), r.Header.Get("X-Api-Key"))
-	if rawKey == "" {
-		http.Error(w, "missing API key", http.StatusUnauthorized)
-		return
-	}
-
-	orgID, appErr := h.authService.ResolveApiKey(r.Context(), rawKey)
-	if appErr != nil {
-		http.Error(w, "invalid API key", http.StatusUnauthorized)
+	orgID, err := resolveOrgFromHTTP(r, h.authService)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -214,7 +294,7 @@ func (h *httpLogHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	req := &collectorpb.ExportLogsServiceRequest{}
+	req := &collectorlogspb.ExportLogsServiceRequest{}
 
 	contentType := r.Header.Get("Content-Type")
 	switch {
@@ -237,14 +317,83 @@ func (h *httpLogHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ingestErr := h.ingestService.IngestLogs(r.Context(), ingestservice.IngestLogsInput{
-		OrganizationID: *orgID,
+		OrganizationID: orgID,
 		ResourceLogs:   req.GetResourceLogs(),
 	}); ingestErr != nil {
 		http.Error(w, "failed to ingest logs", http.StatusInternalServerError)
 		return
 	}
 
-	resp := &collectorpb.ExportLogsServiceResponse{}
+	resp := &collectorlogspb.ExportLogsServiceResponse{}
+
+	switch {
+	case strings.Contains(contentType, "application/json"):
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	default:
+		w.Header().Set("Content-Type", "application/x-protobuf")
+		out, _ := proto.Marshal(resp)
+		w.Write(out)
+	}
+}
+
+// --- HTTP Trace handler ---
+
+type httpTraceHandler struct {
+	authService   authservice.Service
+	ingestService ingestservice.Service
+	logger        *slog.Logger
+}
+
+func (h *httpTraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID, err := resolveOrgFromHTTP(r, h.authService)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	req := &collectortracepb.ExportTraceServiceRequest{}
+
+	contentType := r.Header.Get("Content-Type")
+	switch {
+	case strings.Contains(contentType, "application/x-protobuf"):
+		if err := proto.Unmarshal(body, req); err != nil {
+			http.Error(w, "failed to unmarshal protobuf", http.StatusBadRequest)
+			return
+		}
+	case strings.Contains(contentType, "application/json"):
+		if err := json.Unmarshal(body, req); err != nil {
+			http.Error(w, "failed to unmarshal json", http.StatusBadRequest)
+			return
+		}
+	default:
+		if err := proto.Unmarshal(body, req); err != nil {
+			http.Error(w, "failed to unmarshal request", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if ingestErr := h.ingestService.IngestTraces(r.Context(), ingestservice.IngestTracesInput{
+		OrganizationID: orgID,
+		ResourceSpans:  req.GetResourceSpans(),
+	}); ingestErr != nil {
+		http.Error(w, "failed to ingest traces", http.StatusInternalServerError)
+		return
+	}
+
+	resp := &collectortracepb.ExportTraceServiceResponse{}
 
 	switch {
 	case strings.Contains(contentType, "application/json"):

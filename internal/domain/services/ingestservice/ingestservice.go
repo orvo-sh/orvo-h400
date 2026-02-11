@@ -10,16 +10,19 @@ import (
 
 type Service interface {
 	IngestLogs(ctx context.Context, input IngestLogsInput) apperr.Error
+	IngestTraces(ctx context.Context, input IngestTracesInput) apperr.Error
 }
 
 type service struct {
-	sink   *sink.LogSink
-	logger *slog.Logger
+	logSink  *sink.LogSink
+	spanSink *sink.SpanSink
+	logger   *slog.Logger
 }
 
-func New(sink *sink.LogSink, logger *slog.Logger) Service {
+func New(logSink *sink.LogSink, spanSink *sink.SpanSink, logger *slog.Logger) Service {
 	return &service{
-		sink:   sink,
-		logger: logger,
+		logSink:  logSink,
+		spanSink: spanSink,
+		logger:   logger,
 	}
 }

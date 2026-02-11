@@ -36,6 +36,7 @@ func main() {
 	handlers.NewOrganizationHandler(nil, nil).RegisterRoutes(api)
 	handlers.NewApiKeyHandler(nil).RegisterRoutes(api)
 	handlers.NewLogHandler(nil, nil).RegisterRoutes(api)
+	handlers.NewTraceHandler(nil, nil).RegisterRoutes(api)
 
 	spec, err := api.OpenAPI().YAML()
 	if err != nil {

@@ -25,7 +25,7 @@ func (s *service) IngestLogs(ctx context.Context, input IngestLogsInput) apperr.
 		return nil
 	}
 
-	if err := s.sink.Enqueue(ctx, records); err != nil {
+	if err := s.logSink.Enqueue(ctx, records); err != nil {
 		s.logger.ErrorContext(ctx, "IngestLogs: failed to enqueue logs", slog.Any("error", err))
 		return errs.ErrInternal
 	}

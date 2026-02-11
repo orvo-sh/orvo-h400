@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -23,6 +24,11 @@ func New(ctx context.Context, config Config) (*Client, error) {
 		Password: config.Password,
 		DB:       config.DB,
 	})
+
+	// Enable OpenTelemetry tracing on the Redis client.
+	if err := redisotel.InstrumentTracing(rdb); err != nil {
+		return nil, err
+	}
 
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		return nil, err

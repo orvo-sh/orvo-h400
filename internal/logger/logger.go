@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel/log/global"
 	"go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 )
 
 type Config struct {
@@ -19,17 +18,23 @@ type Config struct {
 	Environment  string
 	OTLPEndpoint string
 	APIKey       string
+
+	// Resource is an optional pre-built OTEL resource. When provided the
+	// logger will reuse it instead of creating its own, so the same
+	// service.name / deployment.environment attributes are shared with the
+	// TracerProvider.
+	Resource *resource.Resource
 }
 
 func New(ctx context.Context, config Config) (*slog.Logger, func(), error) {
-	res, err := resource.New(ctx,
-		resource.WithAttributes(
-			semconv.ServiceName(config.ServiceName),
-			semconv.DeploymentEnvironment(config.Environment),
-		),
-	)
-	if err != nil {
-		return nil, nil, err
+	res := config.Resource
+	if res == nil {
+		// Backwards-compatible: if no resource was supplied, build one.
+		var err error
+		res, err = resource.New(ctx, resource.WithFromEnv())
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	exporter, err := otlploggrpc.New(ctx,

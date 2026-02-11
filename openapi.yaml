@@ -257,6 +257,44 @@ components:
         - user
         - active_organization
       type: object
+    GetTraceOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GetTraceOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        spans:
+          items:
+            $ref: "#/components/schemas/Span"
+          type:
+            - array
+            - "null"
+      required:
+        - spans
+      type: object
+    GetTraceServicesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GetTraceServicesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        services:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - services
+      type: object
     HistogramBucket:
       additionalProperties: false
       properties:
@@ -476,6 +514,28 @@ components:
       required:
         - logs
       type: object
+    QueryTracesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/QueryTracesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        next_cursor:
+          format: date-time
+          type: string
+        traces:
+          items:
+            $ref: "#/components/schemas/TraceSummary"
+          type:
+            - array
+            - "null"
+      required:
+        - traces
+      type: object
     RegisterInputBody:
       additionalProperties: false
       properties:
@@ -556,6 +616,172 @@ components:
             - "null"
       required:
         - organization_id
+      type: object
+    Span:
+      additionalProperties: false
+      properties:
+        deployment_environment:
+          type: string
+        duration_ns:
+          format: int64
+          type: integer
+        end_time:
+          format: date-time
+          type: string
+        events:
+          items:
+            $ref: "#/components/schemas/SpanEvent"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        kind:
+          format: int32
+          minimum: 0
+          type: integer
+        links:
+          items:
+            $ref: "#/components/schemas/SpanLink"
+          type:
+            - array
+            - "null"
+        name:
+          type: string
+        organization_id:
+          type: string
+        parent_span_id:
+          type: string
+        resource_attributes:
+          additionalProperties:
+            type: string
+          type: object
+        resource_schema_url:
+          type: string
+        scope_attributes:
+          additionalProperties:
+            type: string
+          type: object
+        scope_name:
+          type: string
+        scope_schema_url:
+          type: string
+        scope_version:
+          type: string
+        service_name:
+          type: string
+        span_attributes:
+          additionalProperties:
+            type: string
+          type: object
+        span_id:
+          type: string
+        start_time:
+          format: date-time
+          type: string
+        status_code:
+          format: int32
+          minimum: 0
+          type: integer
+        status_message:
+          type: string
+        trace_id:
+          type: string
+        trace_state:
+          type: string
+      required:
+        - id
+        - organization_id
+        - trace_id
+        - span_id
+        - parent_span_id
+        - trace_state
+        - name
+        - kind
+        - start_time
+        - end_time
+        - duration_ns
+        - status_code
+        - status_message
+        - resource_attributes
+        - scope_attributes
+        - span_attributes
+        - resource_schema_url
+        - scope_name
+        - scope_version
+        - scope_schema_url
+        - events
+        - links
+        - service_name
+        - deployment_environment
+      type: object
+    SpanEvent:
+      additionalProperties: false
+      properties:
+        attributes:
+          additionalProperties:
+            type: string
+          type: object
+        name:
+          type: string
+        timestamp:
+          format: date-time
+          type: string
+      required:
+        - name
+        - timestamp
+        - attributes
+      type: object
+    SpanLink:
+      additionalProperties: false
+      properties:
+        attributes:
+          additionalProperties:
+            type: string
+          type: object
+        span_id:
+          type: string
+        trace_id:
+          type: string
+        trace_state:
+          type: string
+      required:
+        - trace_id
+        - span_id
+        - trace_state
+        - attributes
+      type: object
+    TraceSummary:
+      additionalProperties: false
+      properties:
+        duration_ns:
+          format: int64
+          type: integer
+        error_count:
+          format: int64
+          minimum: 0
+          type: integer
+        root_service:
+          type: string
+        root_span_name:
+          type: string
+        span_count:
+          format: int64
+          minimum: 0
+          type: integer
+        start_time:
+          format: date-time
+          type: string
+        trace_id:
+          type: string
+      required:
+        - trace_id
+        - root_span_name
+        - root_service
+        - start_time
+        - duration_ns
+        - span_count
+        - error_count
       type: object
     User:
       additionalProperties: false
@@ -980,6 +1206,149 @@ paths:
           description: Error
       tags:
         - logs
+  /organizations/{organization_id}/traces:
+    get:
+      operationId: query-traces
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+        - description: Start time (RFC3339)
+          explode: false
+          in: query
+          name: start
+          schema:
+            description: Start time (RFC3339)
+            type: string
+        - description: End time (RFC3339)
+          explode: false
+          in: query
+          name: end
+          schema:
+            description: End time (RFC3339)
+            type: string
+        - description: Max results to return (default 50, max 500)
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: Max results to return (default 50, max 500)
+            format: int64
+            type: integer
+        - description: Pagination cursor (RFC3339Nano timestamp)
+          explode: false
+          in: query
+          name: cursor
+          schema:
+            description: Pagination cursor (RFC3339Nano timestamp)
+            type: string
+        - description: Search on span name
+          explode: false
+          in: query
+          name: search
+          schema:
+            description: Search on span name
+            type: string
+        - description: Filter by service name (comma-separated)
+          explode: false
+          in: query
+          name: service
+          schema:
+            description: Filter by service name (comma-separated)
+            type: string
+        - description: "Filter by status code (comma-separated: ok,error,unset)"
+          explode: false
+          in: query
+          name: status
+          schema:
+            description: "Filter by status code (comma-separated: ok,error,unset)"
+            type: string
+        - description: Minimum trace duration in milliseconds
+          explode: false
+          in: query
+          name: min_duration
+          schema:
+            description: Minimum trace duration in milliseconds
+            format: int64
+            type: integer
+        - description: Maximum trace duration in milliseconds
+          explode: false
+          in: query
+          name: max_duration
+          schema:
+            description: Maximum trace duration in milliseconds
+            format: int64
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryTracesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - traces
+  /organizations/{organization_id}/traces/services:
+    get:
+      operationId: get-trace-services
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTraceServicesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - traces
+  /organizations/{organization_id}/traces/{trace_id}:
+    get:
+      operationId: get-trace
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: trace_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTraceOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - traces
 servers:
   - url: /api/v1
 
