@@ -49,3 +49,25 @@ type GetTraceServicesOutput struct {
 		Services []string `json:"services"`
 	}
 }
+
+// GetServiceMapInput represents the HTTP request for the service dependency map.
+type GetServiceMapInput struct {
+	OrganizationID string `path:"organization_id"`
+}
+
+type GetServiceMapOutput struct {
+	Body struct {
+		Edges []models.ServiceEdge `json:"edges"`
+	}
+}
+
+// GetSourcesInput represents the HTTP request for listing trace sources.
+type GetSourcesInput struct {
+	OrganizationID string `path:"organization_id"`
+}
+
+type GetSourcesOutput struct {
+	Body struct {
+		Sources []models.ServiceSource `json:"sources"`
+	}
+}

@@ -14,6 +14,8 @@ type Service interface {
 	QueryTraces(ctx context.Context, input QueryTracesInput) (*QueryTracesOutput, apperr.Error)
 	GetTrace(ctx context.Context, orgID string, traceID string) (*GetTraceOutput, apperr.Error)
 	GetServices(ctx context.Context, organizationID string) ([]string, apperr.Error)
+	GetServiceMap(ctx context.Context, organizationID string) ([]models.ServiceEdge, apperr.Error)
+	GetSources(ctx context.Context, organizationID string) ([]models.ServiceSource, apperr.Error)
 }
 
 type service struct {

@@ -2,7 +2,7 @@
 	import GalleryVerticalEndIcon from '@lucide/svelte/icons/gallery-vertical-end';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 
-	import { IconLogs, IconRoute } from '@tabler/icons-svelte';
+	import { IconLogs, IconRoute, IconChartLine, IconLayoutDashboard } from '@tabler/icons-svelte';
 </script>
 
 <script lang="ts">
@@ -70,17 +70,36 @@
 						{ title: 'Sources', url: '/logs/sources' }
 					]
 				},
-				{
-					title: 'Traces',
-					url: '/traces',
-					icon: IconRoute,
-					isActive: page.url.pathname.includes('/traces'),
-					items: [
-						{ title: 'All Traces', url: '/traces' },
-						{ title: 'Service Map', url: '/traces/service-map' },
-						{ title: 'Sources', url: '/traces/sources' }
-					]
-				},
+			{
+				title: 'Traces',
+				url: '/traces',
+				icon: IconRoute,
+				isActive: page.url.pathname.includes('/traces'),
+				items: [
+					{ title: 'All Traces', url: '/traces' },
+					{ title: 'Service Map', url: '/traces/service-map' },
+					{ title: 'Sources', url: '/traces/sources' }
+				]
+			},
+			{
+				title: 'Metrics',
+				url: '/metrics',
+				icon: IconChartLine,
+				isActive: page.url.pathname.includes('/metrics'),
+				items: [
+					{ title: 'Explorer', url: '/metrics' },
+					{ title: 'Services', url: '/metrics/services' }
+				]
+			},
+			{
+				title: 'Dashboards',
+				url: '/dashboards',
+				icon: IconLayoutDashboard,
+				isActive: page.url.pathname.includes('/dashboards'),
+				items: [
+					{ title: 'All Dashboards', url: '/dashboards' }
+				]
+			},
 				{
 					title: 'Settings',
 					url: '/settings',

@@ -13,9 +13,12 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/orvo-sh/orvo/internal/config"
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
+	"github.com/orvo-sh/orvo/internal/domain/services/dashboardservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/logservice"
+	"github.com/orvo-sh/orvo/internal/domain/services/metricservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/organizationservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/traceservice"
+	"github.com/orvo-sh/orvo/internal/domain/workers"
 	"github.com/orvo-sh/orvo/internal/http/handlers"
 	"github.com/orvo-sh/orvo/internal/http/middleware/authmiddleware"
 	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
@@ -23,6 +26,7 @@ import (
 	"github.com/orvo-sh/orvo/internal/infra/redis"
 	"github.com/orvo-sh/orvo/internal/logger"
 	appotel "github.com/orvo-sh/orvo/internal/otel"
+	"github.com/orvo-sh/orvo/internal/sink"
 	"github.com/orvo-sh/orvo/pkg/background"
 	"github.com/orvo-sh/orvo/pkg/util"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -103,6 +107,21 @@ func main() {
 	})
 	logService := logservice.New(clickhouse, logger)
 	traceService := traceservice.New(clickhouse, logger)
+	metricService := metricservice.New(clickhouse, logger)
+	dashboardService := dashboardservice.New(postgres, logger)
+
+	// Derived metrics worker: computes Apdex, health scores, error budgets
+	// and writes them back as metric points through MetricSink.
+	metricSink := sink.NewMetricSink(clickhouse, logger)
+	defer metricSink.Close()
+
+	derivedMetricsWorker := workers.NewDerivedMetricsWorker(clickhouse, metricSink, logger, workers.DerivedMetricsConfig{
+		ComputeInterval: 1 * time.Minute,
+		Lookback:        2 * time.Minute,
+		ApdexThreshold:  500.0, // 500ms
+	})
+	derivedMetricsWorker.Start()
+	defer derivedMetricsWorker.Stop()
 
 	handlers.FrontendHandler(r)
 	r.With(
@@ -141,6 +160,8 @@ func main() {
 			handlers.NewApiKeyHandler(authService).RegisterRoutes(api)
 			handlers.NewLogHandler(logService, authService).RegisterRoutes(api)
 			handlers.NewTraceHandler(traceService, authService).RegisterRoutes(api)
+			handlers.NewMetricHandler(metricService, authService).RegisterRoutes(api)
+			handlers.NewDashboardHandler(dashboardService, authService).RegisterRoutes(api)
 
 			r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)

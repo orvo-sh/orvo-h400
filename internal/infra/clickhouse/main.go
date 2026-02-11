@@ -49,6 +49,14 @@ func New(ctx context.Context, config Config) (*DB, error) {
 	}, nil
 }
 
+// hasParentSpan returns true when ctx already carries a valid, recording span.
+// We only create ClickHouse child-spans in that case to avoid orphaned root
+// spans produced by background workers (e.g. the batcher flush goroutine).
+func hasParentSpan(ctx context.Context) bool {
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	return sc.IsValid()
+}
+
 // spanAttrs returns common span attributes for a ClickHouse operation.
 func spanAttrs(query string) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
@@ -65,59 +73,78 @@ func spanAttrs(query string) []attribute.KeyValue {
 }
 
 func (ch *DB) Query(ctx context.Context, query string, args ...any) (driver.Rows, error) {
-	ctx, span := tracer.Start(ctx, "clickhouse.Query",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(spanAttrs(query)...),
-	)
-	defer span.End()
+	if hasParentSpan(ctx) {
+		var span trace.Span
+		ctx, span = tracer.Start(ctx, "clickhouse.Query",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(spanAttrs(query)...),
+		)
+		defer span.End()
 
-	rows, err := ch.conn.Query(ctx, query, args...)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		rows, err := ch.conn.Query(ctx, query, args...)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		return rows, err
 	}
-	return rows, err
+
+	return ch.conn.Query(ctx, query, args...)
 }
 
 func (ch *DB) QueryRow(ctx context.Context, query string, args ...any) driver.Row {
-	ctx, span := tracer.Start(ctx, "clickhouse.QueryRow",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(spanAttrs(query)...),
-	)
-	defer span.End()
+	if hasParentSpan(ctx) {
+		var span trace.Span
+		ctx, span = tracer.Start(ctx, "clickhouse.QueryRow",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(spanAttrs(query)...),
+		)
+		defer span.End()
 
-	row := ch.conn.QueryRow(ctx, query, args...)
-	return row
+		return ch.conn.QueryRow(ctx, query, args...)
+	}
+
+	return ch.conn.QueryRow(ctx, query, args...)
 }
 
 func (ch *DB) Exec(ctx context.Context, query string, args ...any) error {
-	ctx, span := tracer.Start(ctx, "clickhouse.Exec",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(spanAttrs(query)...),
-	)
-	defer span.End()
+	if hasParentSpan(ctx) {
+		var span trace.Span
+		ctx, span = tracer.Start(ctx, "clickhouse.Exec",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(spanAttrs(query)...),
+		)
+		defer span.End()
 
-	err := ch.conn.Exec(ctx, query, args...)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		err := ch.conn.Exec(ctx, query, args...)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		return err
 	}
-	return err
+
+	return ch.conn.Exec(ctx, query, args...)
 }
 
 func (ch *DB) PrepareBatch(ctx context.Context, query string) (driver.Batch, error) {
-	ctx, span := tracer.Start(ctx, "clickhouse.PrepareBatch",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(spanAttrs(query)...),
-	)
-	defer span.End()
+	if hasParentSpan(ctx) {
+		var span trace.Span
+		ctx, span = tracer.Start(ctx, "clickhouse.PrepareBatch",
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(spanAttrs(query)...),
+		)
+		defer span.End()
 
-	batch, err := ch.conn.PrepareBatch(ctx, query)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		batch, err := ch.conn.PrepareBatch(ctx, query)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		return batch, err
 	}
-	return batch, err
+
+	return ch.conn.PrepareBatch(ctx, query)
 }
 
 func (ch *DB) Close() error {

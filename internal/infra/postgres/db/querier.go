@@ -13,18 +13,22 @@ type Querier interface {
 	CountMembersByOrganizationID(ctx context.Context, organizationID string) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	CreateApiKey(ctx context.Context, arg CreateApiKeyParams) (ApiKey, error)
+	CreateDashboard(ctx context.Context, arg CreateDashboardParams) (Dashboard, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (OrganizationInvitation, error)
+	CreateMetricConfiguration(ctx context.Context, arg CreateMetricConfigurationParams) (MetricConfiguration, error)
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
 	CreateOrganizationMember(ctx context.Context, arg CreateOrganizationMemberParams) (OrganizationMember, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteAccount(ctx context.Context, id string) error
 	DeleteApiKey(ctx context.Context, arg DeleteApiKeyParams) error
+	DeleteDashboard(ctx context.Context, arg DeleteDashboardParams) error
 	DeleteExpiredInvitations(ctx context.Context) error
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteInvitation(ctx context.Context, id string) error
 	DeleteMember(ctx context.Context, id string) error
 	DeleteMemberByOrgAndUser(ctx context.Context, arg DeleteMemberByOrgAndUserParams) error
+	DeleteMetricConfiguration(ctx context.Context, arg DeleteMetricConfigurationParams) error
 	DeleteOrganization(ctx context.Context, id string) error
 	DeleteSession(ctx context.Context, id string) error
 	DeleteSessionByToken(ctx context.Context, token string) error
@@ -34,9 +38,11 @@ type Querier interface {
 	GetAccountsByUserID(ctx context.Context, userID string) ([]Account, error)
 	GetApiKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetApiKeyByID(ctx context.Context, id string) (ApiKey, error)
+	GetDashboardByID(ctx context.Context, arg GetDashboardByIDParams) (Dashboard, error)
 	GetInvitationByID(ctx context.Context, id string) (OrganizationInvitation, error)
 	GetMemberByID(ctx context.Context, id string) (OrganizationMember, error)
 	GetMemberByOrgAndUser(ctx context.Context, arg GetMemberByOrgAndUserParams) (OrganizationMember, error)
+	GetMetricConfiguration(ctx context.Context, arg GetMetricConfigurationParams) (MetricConfiguration, error)
 	GetOrganizationByID(ctx context.Context, id string) (Organization, error)
 	GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error)
 	GetPendingInvitationByEmailAndOrg(ctx context.Context, arg GetPendingInvitationByEmailAndOrgParams) (OrganizationInvitation, error)
@@ -49,16 +55,20 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id string) (User, error)
 	GetUserOrganizationMemberships(ctx context.Context, userID string) ([]GetUserOrganizationMembershipsRow, error)
 	ListApiKeysByOrganizationID(ctx context.Context, organizationID string) ([]ApiKey, error)
+	ListDashboardsByOrganizationID(ctx context.Context, organizationID string) ([]Dashboard, error)
 	ListInvitationsByOrganizationID(ctx context.Context, organizationID string) ([]ListInvitationsByOrganizationIDRow, error)
 	ListMembersByOrganizationID(ctx context.Context, arg ListMembersByOrganizationIDParams) ([]ListMembersByOrganizationIDRow, error)
+	ListMetricConfigurationsByOrganizationID(ctx context.Context, organizationID string) ([]MetricConfiguration, error)
 	ListOrganizationsByUserID(ctx context.Context, userID string) ([]Organization, error)
 	ListPendingInvitationsByEmail(ctx context.Context, email string) ([]ListPendingInvitationsByEmailRow, error)
 	RevokeApiKey(ctx context.Context, arg RevokeApiKeyParams) (ApiKey, error)
 	SetActiveOrganization(ctx context.Context, arg SetActiveOrganizationParams) (Session, error)
 	UpdateAccountPassword(ctx context.Context, arg UpdateAccountPasswordParams) error
 	UpdateApiKeyLastUsed(ctx context.Context, keyHash string) error
+	UpdateDashboard(ctx context.Context, arg UpdateDashboardParams) (Dashboard, error)
 	UpdateInvitationStatus(ctx context.Context, arg UpdateInvitationStatusParams) (OrganizationInvitation, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) (OrganizationMember, error)
+	UpdateMetricConfiguration(ctx context.Context, arg UpdateMetricConfigurationParams) (MetricConfiguration, error)
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)
 	UpdateSessionExpiry(ctx context.Context, arg UpdateSessionExpiryParams) (Session, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)

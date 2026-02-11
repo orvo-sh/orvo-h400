@@ -29,6 +29,28 @@ type ApiKey struct {
 	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
 }
 
+type Dashboard struct {
+	ID             string             `json:"id"`
+	OrganizationID string             `json:"organization_id"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	Panels         []byte             `json:"panels"`
+	Layout         []byte             `json:"layout"`
+	CreatedBy      string             `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MetricConfiguration struct {
+	ID             string             `json:"id"`
+	OrganizationID string             `json:"organization_id"`
+	MetricName     string             `json:"metric_name"`
+	Config         []byte             `json:"config"`
+	Enabled        bool               `json:"enabled"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Organization struct {
 	ID        string             `json:"id"`
 	Name      string             `json:"name"`

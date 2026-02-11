@@ -27,6 +27,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	collectorlogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	collectormetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	collectortracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -88,8 +89,9 @@ func main() {
 
 	logSink := sink.NewLogSink(ch, logger)
 	spanSink := sink.NewSpanSink(ch, logger)
+	metricSink := sink.NewMetricSink(ch, logger)
 
-	ingestService := ingestservice.New(logSink, spanSink, logger)
+	ingestService := ingestservice.New(logSink, spanSink, metricSink, logger)
 
 	// OTLP/gRPC receiver (:4317).
 	grpcServer := grpc.NewServer(
@@ -101,6 +103,11 @@ func main() {
 		logger:        logger,
 	})
 	collectortracepb.RegisterTraceServiceServer(grpcServer, &grpcTraceHandler{
+		authService:   authService,
+		ingestService: ingestService,
+		logger:        logger,
+	})
+	collectormetricspb.RegisterMetricsServiceServer(grpcServer, &grpcMetricHandler{
 		authService:   authService,
 		ingestService: ingestService,
 		logger:        logger,
@@ -126,8 +133,14 @@ func main() {
 		ingestService: ingestService,
 		logger:        logger,
 	}
+	httpMetricH := &httpMetricHandler{
+		authService:   authService,
+		ingestService: ingestService,
+		logger:        logger,
+	}
 	httpMux.Handle("/v1/logs", httpLogH)
 	httpMux.Handle("/v1/traces", httpTraceH)
+	httpMux.Handle("/v1/metrics", httpMetricH)
 	httpMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))
 	})
@@ -160,6 +173,9 @@ func main() {
 	}
 	if err := spanSink.Close(); err != nil {
 		logger.Error("failed to close span sink", slog.Any("error", err))
+	}
+	if err := metricSink.Close(); err != nil {
+		logger.Error("failed to close metric sink", slog.Any("error", err))
 	}
 
 	logger.Info("ingest service stopped")
@@ -394,6 +410,100 @@ func (h *httpTraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := &collectortracepb.ExportTraceServiceResponse{}
+
+	switch {
+	case strings.Contains(contentType, "application/json"):
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	default:
+		w.Header().Set("Content-Type", "application/x-protobuf")
+		out, _ := proto.Marshal(resp)
+		w.Write(out)
+	}
+}
+
+// --- gRPC Metric handler ---
+
+type grpcMetricHandler struct {
+	collectormetricspb.UnimplementedMetricsServiceServer
+	authService   authservice.Service
+	ingestService ingestservice.Service
+	logger        *slog.Logger
+}
+
+func (h *grpcMetricHandler) Export(ctx context.Context, req *collectormetricspb.ExportMetricsServiceRequest) (*collectormetricspb.ExportMetricsServiceResponse, error) {
+	orgID, err := resolveOrgFromGRPC(ctx, h.authService)
+	if err != nil {
+		return nil, err
+	}
+
+	if ingestErr := h.ingestService.IngestMetrics(ctx, ingestservice.IngestMetricsInput{
+		OrganizationID:  orgID,
+		ResourceMetrics: req.GetResourceMetrics(),
+	}); ingestErr != nil {
+		return nil, status.Error(codes.Internal, "failed to ingest metrics")
+	}
+
+	return &collectormetricspb.ExportMetricsServiceResponse{}, nil
+}
+
+// --- HTTP Metric handler ---
+
+type httpMetricHandler struct {
+	authService   authservice.Service
+	ingestService ingestservice.Service
+	logger        *slog.Logger
+}
+
+func (h *httpMetricHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID, err := resolveOrgFromHTTP(r, h.authService)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	req := &collectormetricspb.ExportMetricsServiceRequest{}
+
+	contentType := r.Header.Get("Content-Type")
+	switch {
+	case strings.Contains(contentType, "application/x-protobuf"):
+		if err := proto.Unmarshal(body, req); err != nil {
+			http.Error(w, "failed to unmarshal protobuf", http.StatusBadRequest)
+			return
+		}
+	case strings.Contains(contentType, "application/json"):
+		if err := json.Unmarshal(body, req); err != nil {
+			http.Error(w, "failed to unmarshal json", http.StatusBadRequest)
+			return
+		}
+	default:
+		if err := proto.Unmarshal(body, req); err != nil {
+			http.Error(w, "failed to unmarshal request", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if ingestErr := h.ingestService.IngestMetrics(r.Context(), ingestservice.IngestMetricsInput{
+		OrganizationID:  orgID,
+		ResourceMetrics: req.GetResourceMetrics(),
+	}); ingestErr != nil {
+		http.Error(w, "failed to ingest metrics", http.StatusInternalServerError)
+		return
+	}
+
+	resp := &collectormetricspb.ExportMetricsServiceResponse{}
 
 	switch {
 	case strings.Contains(contentType, "application/json"):

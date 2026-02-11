@@ -18,6 +18,8 @@ import type {
 
 import type {
   ErrorModel,
+  GetServiceMapOutputBody,
+  GetSourcesOutputBody,
   GetTraceOutputBody,
   GetTraceServicesOutputBody,
   QueryTracesOutputBody,
@@ -143,6 +145,100 @@ export function createQueryTraces<TData = Awaited<ReturnType<typeof queryTraces>
 
 
 
+export type getServiceMapResponse200 = {
+  data: GetServiceMapOutputBody
+  status: 200
+}
+
+export type getServiceMapResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+    
+export type getServiceMapResponseSuccess = (getServiceMapResponse200) & {
+  headers: Headers;
+};
+export type getServiceMapResponseError = (getServiceMapResponseDefault) & {
+  headers: Headers;
+};
+
+export type getServiceMapResponse = (getServiceMapResponseSuccess | getServiceMapResponseError)
+
+export const getGetServiceMapUrl = (organizationId: string,) => {
+
+
+  
+
+  return `http://localhost:8080/api/v1/organizations/${organizationId}/traces/service-map`
+}
+
+export const getServiceMap = async (organizationId: string, options?: RequestInit): Promise<getServiceMapResponse> => {
+  
+  const res = await fetch(getGetServiceMapUrl(organizationId),
+  {
+      credentials: 'include',
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getServiceMapResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getServiceMapResponse
+}
+
+
+
+
+
+export const getGetServiceMapQueryKey = (organizationId: string,) => {
+    return [
+    `http://localhost:8080/api/v1/organizations/${organizationId}/traces/service-map`
+    ] as const;
+    }
+
+    
+export const getGetServiceMapQueryOptions = <TData = Awaited<ReturnType<typeof getServiceMap>>, TError = ErrorModel>(organizationId: string, options?: { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof getServiceMap>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetServiceMapQueryKey(organizationId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getServiceMap>>> = ({ signal }) => getServiceMap(organizationId, { signal, ...fetchOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(organizationId), ...queryOptions} as CreateQueryOptions<Awaited<ReturnType<typeof getServiceMap>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetServiceMapQueryResult = NonNullable<Awaited<ReturnType<typeof getServiceMap>>>
+export type GetServiceMapQueryError = ErrorModel
+
+
+
+export function createGetServiceMap<TData = Awaited<ReturnType<typeof getServiceMap>>, TError = ErrorModel>(
+ organizationId: () =>  string, options?: () => { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof getServiceMap>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: () => QueryClient 
+ ): CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  
+
+  const query = createQuery(() => getGetServiceMapQueryOptions(organizationId(),options?.()), queryClient) as CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return query
+}
+
+
+
+
 export type getTraceServicesResponse200 = {
   data: GetTraceServicesOutputBody
   status: 200
@@ -230,6 +326,100 @@ export function createGetTraceServices<TData = Awaited<ReturnType<typeof getTrac
   
 
   const query = createQuery(() => getGetTraceServicesQueryOptions(organizationId(),options?.()), queryClient) as CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return query
+}
+
+
+
+
+export type getTraceSourcesResponse200 = {
+  data: GetSourcesOutputBody
+  status: 200
+}
+
+export type getTraceSourcesResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+    
+export type getTraceSourcesResponseSuccess = (getTraceSourcesResponse200) & {
+  headers: Headers;
+};
+export type getTraceSourcesResponseError = (getTraceSourcesResponseDefault) & {
+  headers: Headers;
+};
+
+export type getTraceSourcesResponse = (getTraceSourcesResponseSuccess | getTraceSourcesResponseError)
+
+export const getGetTraceSourcesUrl = (organizationId: string,) => {
+
+
+  
+
+  return `http://localhost:8080/api/v1/organizations/${organizationId}/traces/sources`
+}
+
+export const getTraceSources = async (organizationId: string, options?: RequestInit): Promise<getTraceSourcesResponse> => {
+  
+  const res = await fetch(getGetTraceSourcesUrl(organizationId),
+  {
+      credentials: 'include',
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getTraceSourcesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getTraceSourcesResponse
+}
+
+
+
+
+
+export const getGetTraceSourcesQueryKey = (organizationId: string,) => {
+    return [
+    `http://localhost:8080/api/v1/organizations/${organizationId}/traces/sources`
+    ] as const;
+    }
+
+    
+export const getGetTraceSourcesQueryOptions = <TData = Awaited<ReturnType<typeof getTraceSources>>, TError = ErrorModel>(organizationId: string, options?: { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof getTraceSources>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTraceSourcesQueryKey(organizationId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTraceSources>>> = ({ signal }) => getTraceSources(organizationId, { signal, ...fetchOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(organizationId), ...queryOptions} as CreateQueryOptions<Awaited<ReturnType<typeof getTraceSources>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetTraceSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof getTraceSources>>>
+export type GetTraceSourcesQueryError = ErrorModel
+
+
+
+export function createGetTraceSources<TData = Awaited<ReturnType<typeof getTraceSources>>, TError = ErrorModel>(
+ organizationId: () =>  string, options?: () => { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof getTraceSources>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: () => QueryClient 
+ ): CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  
+
+  const query = createQuery(() => getGetTraceSourcesQueryOptions(organizationId(),options?.()), queryClient) as CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return query
 }

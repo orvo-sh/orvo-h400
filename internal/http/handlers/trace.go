@@ -52,6 +52,22 @@ func (h *TraceHandler) RegisterRoutes(api huma.API) {
 		Tags:        []string{"traces"},
 		Middlewares: huma.Middlewares{authMiddleware},
 	}, h.getServices)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-service-map",
+		Method:      http.MethodGet,
+		Path:        "/organizations/{organization_id}/traces/service-map",
+		Tags:        []string{"traces"},
+		Middlewares: huma.Middlewares{authMiddleware},
+	}, h.getServiceMap)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-trace-sources",
+		Method:      http.MethodGet,
+		Path:        "/organizations/{organization_id}/traces/sources",
+		Tags:        []string{"traces"},
+		Middlewares: huma.Middlewares{authMiddleware},
+	}, h.getSources)
 }
 
 func (h *TraceHandler) queryTraces(ctx context.Context, input *dto.QueryTracesInput) (*dto.QueryTracesOutput, error) {
@@ -160,6 +176,36 @@ func (h *TraceHandler) getServices(ctx context.Context, input *dto.GetTraceServi
 			Services []string `json:"services"`
 		}{
 			Services: services,
+		},
+	}, nil
+}
+
+func (h *TraceHandler) getServiceMap(ctx context.Context, input *dto.GetServiceMapInput) (*dto.GetServiceMapOutput, error) {
+	edges, err := h.traceService.GetServiceMap(ctx, input.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.GetServiceMapOutput{
+		Body: struct {
+			Edges []models.ServiceEdge `json:"edges"`
+		}{
+			Edges: edges,
+		},
+	}, nil
+}
+
+func (h *TraceHandler) getSources(ctx context.Context, input *dto.GetSourcesInput) (*dto.GetSourcesOutput, error) {
+	sources, err := h.traceService.GetSources(ctx, input.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.GetSourcesOutput{
+		Body: struct {
+			Sources []models.ServiceSource `json:"sources"`
+		}{
+			Sources: sources,
 		},
 	}, nil
 }

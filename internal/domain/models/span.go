@@ -104,3 +104,21 @@ type TraceSummary struct {
 	SpanCount    uint64    `json:"span_count"`
 	ErrorCount   uint64    `json:"error_count"`
 }
+
+// ServiceEdge represents a caller-to-callee relationship between two services.
+type ServiceEdge struct {
+	Source        string  `json:"source"`
+	Target        string  `json:"target"`
+	RequestCount  uint64  `json:"request_count"`
+	ErrorCount    uint64  `json:"error_count"`
+	AvgDurationNs float64 `json:"avg_duration_ns"`
+}
+
+// ServiceSource represents aggregated stats for a service sending trace data.
+type ServiceSource struct {
+	ServiceName   string    `json:"service_name"`
+	SpanCount     uint64    `json:"span_count"`
+	ErrorCount    uint64    `json:"error_count"`
+	AvgDurationNs float64   `json:"avg_duration_ns"`
+	LastSeen      time.Time `json:"last_seen"`
+}
