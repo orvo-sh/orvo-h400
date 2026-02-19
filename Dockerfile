@@ -5,12 +5,11 @@ WORKDIR /src/frontend
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
-COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY frontend/src ./src
 COPY frontend/static ./static
-COPY frontend/app.html ./
 COPY frontend/components.json ./
 COPY frontend/orval.config.ts ./
 COPY frontend/svelte.config.js ./
