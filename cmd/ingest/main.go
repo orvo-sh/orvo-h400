@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/lmittmann/tint"
 	"github.com/orvo-sh/orvo/internal/config"
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
@@ -39,6 +40,8 @@ import (
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	godotenv.Load(".env")
 
 	cfg := util.Must(config.Load())
 
@@ -179,6 +182,11 @@ func main() {
 	}
 
 	logger.Info("ingest service stopped")
+}
+
+func shouldLoadDotEnv() bool {
+	environment := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENVIRONMENT")))
+	return environment == "" || environment == "development" || environment == "dev" || environment == "local"
 }
 
 // extractApiKey pulls the API key from Authorization header or x-api-key.

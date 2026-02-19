@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/joho/godotenv"
 	"github.com/orvo-sh/orvo/internal/config"
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/dashboardservice"
@@ -34,6 +35,8 @@ import (
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	godotenv.Load(".env")
 
 	cfg := util.Must(config.Load())
 

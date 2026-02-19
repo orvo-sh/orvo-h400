@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/joho/godotenv"
 
 	"github.com/orvo-sh/orvo/internal/config"
 	"github.com/orvo-sh/orvo/internal/http/handlers"
@@ -14,6 +15,8 @@ import (
 )
 
 func main() {
+	godotenv.Load(".env")
+
 	config := util.Must(config.Load())
 
 	r := chi.NewRouter()
