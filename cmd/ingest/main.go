@@ -21,7 +21,6 @@ import (
 	"github.com/orvo-sh/orvo/internal/domain/services/ingestservice"
 	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
 	"github.com/orvo-sh/orvo/internal/infra/postgres"
-	appotel "github.com/orvo-sh/orvo/internal/otel"
 	"github.com/orvo-sh/orvo/internal/sink"
 	"github.com/orvo-sh/orvo/pkg/background"
 	"github.com/orvo-sh/orvo/pkg/util"
@@ -45,38 +44,18 @@ func main() {
 
 	cfg := util.Must(config.Load())
 
-	if cfg.Otel.ApiKey == "" {
-		cfg.Otel.ApiKey = "CGIGs8wiB9DRO6fARVIRlhES4ZtNhSVa0_GxsA-fj61h8fxuKUtGZFaTIChfzsId"
-	}
-
-	// Initialize OpenTelemetry tracing (TracerProvider + OTLP exporter).
-	otelShutdown, _, err := appotel.Init(ctx, appotel.Config{
-		ServiceName:  "orvo-ingest",
-		Environment:  cfg.App.Environment,
-		OTLPEndpoint: cfg.Otel.Endpoint,
-		APIKey:       cfg.Otel.ApiKey,
-	})
-	if err != nil {
-		panic(err)
-	}
-	defer otelShutdown()
-
 	logger := slog.New(tint.NewHandler(os.Stdout, &tint.Options{})).With(
 		slog.String("service", "ingest"),
 		slog.String("environment", cfg.App.Environment),
 	)
 
-	// Infrastructure.
 	pg := util.Must(postgres.New(ctx, postgres.Config{
 		URL: cfg.Postgres.URL,
 	}))
 	defer pg.Close()
 
 	ch := util.Must(clickhouse.New(ctx, clickhouse.Config{
-		Address:  cfg.Clickhouse.Address,
-		Database: cfg.Clickhouse.Database,
-		User:     cfg.Clickhouse.User,
-		Password: cfg.Clickhouse.Password,
+		URL: cfg.Clickhouse.URL,
 	}))
 	defer ch.Close()
 
@@ -96,7 +75,6 @@ func main() {
 
 	ingestService := ingestservice.New(logSink, spanSink, metricSink, logger)
 
-	// OTLP/gRPC receiver (:4317).
 	grpcServer := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	)
@@ -124,7 +102,6 @@ func main() {
 		}
 	}()
 
-	// OTLP/HTTP receiver (:4318).
 	httpMux := http.NewServeMux()
 	httpLogH := &httpLogHandler{
 		authService:   authService,

@@ -28,10 +28,7 @@ type SessionConfig struct {
 }
 
 type ClickhouseConfig struct {
-	Address  string `env:"ADDRESS"`
-	Database string `env:"DATABASE"`
-	User     string `env:"USER"`
-	Password string `env:"PASSWORD"`
+	URL string `env:"URL"`
 }
 
 type AppConfig struct {

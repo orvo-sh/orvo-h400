@@ -25,18 +25,18 @@ type Config struct {
 func New(ctx context.Context, config Config) (*DB, error) {
 	pgxCfg, err := pgxpool.ParseConfig(config.URL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse connection string: %w", err)
+		return nil, fmt.Errorf("postgres: failed to parse connection string: %w", err)
 	}
 
 	pgxCfg.ConnConfig.Tracer = otelpgx.NewTracer()
 
 	pool, err := pgxpool.NewWithConfig(ctx, pgxCfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create connection pool: %w", err)
+		return nil, fmt.Errorf("postgres: failed to create connection pool: %w", err)
 	}
 
 	if err := pool.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, fmt.Errorf("postgres: failed to ping database: %w", err)
 	}
 
 	return &DB{
@@ -72,7 +72,7 @@ func (d *DB) WithTx(ctx context.Context, fn func(q *Queries) error, opts ...TxOp
 		AccessMode: util.Ternary(defaultOpts.ReadOnly, pgx.ReadOnly, pgx.ReadWrite),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return fmt.Errorf("postgres: failed to begin transaction: %w", err)
 	}
 
 	defer func() {
@@ -85,12 +85,12 @@ func (d *DB) WithTx(ctx context.Context, fn func(q *Queries) error, opts ...TxOp
 	txQueries := db.New(tx)
 	if err := fn(txQueries); err != nil {
 		if rbErr := tx.Rollback(ctx); rbErr != nil {
-			return fmt.Errorf("failed to rollback: %v (original error: %w)", rbErr, err)
+			return fmt.Errorf("postgres: failed to rollback: %v (original error: %w)", rbErr, err)
 		}
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("postgres: failed to commit transaction: %w", err)
 	}
 	return nil
 }

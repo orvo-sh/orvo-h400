@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -19,57 +20,27 @@ type DB struct {
 }
 
 type Config struct {
-	Address  string
-	Database string
-	User     string
-	Password string
+	URL string
 }
 
 func New(ctx context.Context, config Config) (*DB, error) {
-
-	conn, err := clickhouse.Open(&clickhouse.Options{
-		Addr: []string{config.Address},
-		Auth: clickhouse.Auth{
-			Database: config.Database,
-			Username: config.User,
-			Password: config.Password,
-		},
-	})
+	opts, err := clickhouse.ParseDSN(config.URL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("clickhouse: failed to parse ClickHouse DSN: %w", err)
 	}
 
-	err = conn.Ping(ctx)
+	conn, err := clickhouse.Open(opts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("clickhouse: failed to connect to ClickHouse: %w", err)
+	}
+
+	if err = conn.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("clickhouse: failed to ping ClickHouse: %w", err)
 	}
 
 	return &DB{
 		conn: conn,
 	}, nil
-}
-
-// hasParentSpan returns true when ctx already carries a valid, recording span.
-// We only create ClickHouse child-spans in that case to avoid orphaned root
-// spans produced by background workers (e.g. the batcher flush goroutine).
-func hasParentSpan(ctx context.Context) bool {
-	sc := trace.SpanFromContext(ctx).SpanContext()
-	return sc.IsValid()
-}
-
-// spanAttrs returns common span attributes for a ClickHouse operation.
-func spanAttrs(query string) []attribute.KeyValue {
-	attrs := []attribute.KeyValue{
-		attribute.String("db.system", "clickhouse"),
-	}
-	stmt := strings.TrimSpace(query)
-	if len(stmt) > 200 {
-		stmt = stmt[:200]
-	}
-	if stmt != "" {
-		attrs = append(attrs, attribute.String("db.statement", stmt))
-	}
-	return attrs
 }
 
 func (ch *DB) Query(ctx context.Context, query string, args ...any) (driver.Rows, error) {
@@ -149,4 +120,23 @@ func (ch *DB) PrepareBatch(ctx context.Context, query string) (driver.Batch, err
 
 func (ch *DB) Close() error {
 	return ch.conn.Close()
+}
+
+func hasParentSpan(ctx context.Context) bool {
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	return sc.IsValid()
+}
+
+func spanAttrs(query string) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{
+		attribute.String("db.system", "clickhouse"),
+	}
+	stmt := strings.TrimSpace(query)
+	if len(stmt) > 200 {
+		stmt = stmt[:200]
+	}
+	if stmt != "" {
+		attrs = append(attrs, attribute.String("db.statement", stmt))
+	}
+	return attrs
 }

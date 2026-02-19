@@ -33,19 +33,14 @@ import (
 )
 
 func main() {
+	godotenv.Load(".env")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	godotenv.Load(".env")
-
 	cfg := util.Must(config.Load())
 
-	if cfg.Otel.ApiKey == "" {
-		cfg.Otel.ApiKey = "CGIGs8wiB9DRO6fARVIRlhES4ZtNhSVa0_GxsA-fj61h8fxuKUtGZFaTIChfzsId"
-	}
-
-	// Initialize OpenTelemetry tracing (TracerProvider + OTLP exporter).
-	otelShutdown, otelRes, err := appotel.Init(ctx, appotel.Config{
+	otelShutdown, err := appotel.Init(ctx, appotel.Config{
 		ServiceName:  "orvo-app",
 		Environment:  cfg.App.Environment,
 		OTLPEndpoint: cfg.Otel.Endpoint,
@@ -56,17 +51,10 @@ func main() {
 	}
 	defer otelShutdown()
 
-	logger, cleanup, err := logger.New(ctx, logger.Config{
+	logger := logger.New(logger.Config{
 		ServiceName:  "orvo-app",
 		Environment:  cfg.App.Environment,
-		OTLPEndpoint: cfg.Otel.Endpoint,
-		APIKey:       cfg.Otel.ApiKey,
-		Resource:     otelRes,
 	})
-	if err != nil {
-		panic(err)
-	}
-	defer cleanup()
 
 	postgres := util.Must(postgres.New(ctx, postgres.Config{
 		URL: cfg.Postgres.URL,
@@ -74,10 +62,7 @@ func main() {
 	defer postgres.Close()
 
 	clickhouse := util.Must(clickhouse.New(ctx, clickhouse.Config{
-		Address:  cfg.Clickhouse.Address,
-		Database: cfg.Clickhouse.Database,
-		User:     cfg.Clickhouse.User,
-		Password: cfg.Clickhouse.Password,
+		URL: cfg.Clickhouse.URL,
 	}))
 	defer clickhouse.Close()
 

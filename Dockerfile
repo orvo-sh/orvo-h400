@@ -22,6 +22,7 @@ WORKDIR /src
 
 COPY go.mod go.sum ./
 RUN go mod download
+RUN GOBIN=/out go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
 
 COPY . .
 COPY --from=frontend-builder /src/frontend/build ./frontend/build
@@ -36,7 +37,11 @@ RUN apk add --no-cache ca-certificates \
 	&& adduser -S -G app app
 
 COPY --from=builder /out/orvo ./orvo
-RUN chown -R app:app /app
+COPY --from=builder /out/goose /usr/local/bin/goose
+COPY --from=builder /src/internal/infra/postgres/migrations ./migrations/postgres
+COPY --from=builder /src/internal/infra/clickhouse/migrations ./migrations/clickhouse
+COPY scripts/migrate.sh ./migrate.sh
+RUN chmod +x /app/migrate.sh && chown -R app:app /app
 
 ENV APP_ENVIRONMENT=production
 ENV APP_APP_PORT=8080
