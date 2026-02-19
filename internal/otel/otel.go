@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
@@ -33,24 +34,36 @@ func Init(ctx context.Context, cfg Config) (shutdown func(), err error) {
 		return nil, fmt.Errorf("otel: create resource: %w", err)
 	}
 
-	traceExporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(cfg.OTLPEndpoint),
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	endpoint := strings.TrimSpace(cfg.OTLPEndpoint)
+	if endpoint == "" {
+		return func() {}, nil
+	}
+
+	traceOpts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(endpoint),
 		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithHeaders(map[string]string{
-			"x-api-key": cfg.APIKey,
-		}),
-	)
+	}
+	logOpts := []otlploggrpc.Option{
+		otlploggrpc.WithEndpoint(endpoint),
+		otlploggrpc.WithInsecure(),
+	}
+	if apiKey := strings.TrimSpace(cfg.APIKey); apiKey != "" {
+		headers := map[string]string{"x-api-key": apiKey}
+		traceOpts = append(traceOpts, otlptracegrpc.WithHeaders(headers))
+		logOpts = append(logOpts, otlploggrpc.WithHeaders(headers))
+	}
+
+	traceExporter, err := otlptracegrpc.New(ctx, traceOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("otel: create trace exporter: %w", err)
 	}
 
-	logExporter, err := otlploggrpc.New(ctx,
-		otlploggrpc.WithEndpoint(cfg.OTLPEndpoint),
-		otlploggrpc.WithInsecure(),
-		otlploggrpc.WithHeaders(map[string]string{
-			"x-api-key": cfg.APIKey,
-		}),
-	)
+	logExporter, err := otlploggrpc.New(ctx, logOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("otel: create log exporter: %w", err)
 	}
@@ -66,10 +79,6 @@ func Init(ctx context.Context, cfg Config) (shutdown func(), err error) {
 
 	otel.SetTracerProvider(tp)
 	global.SetLoggerProvider(lp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
 
 	shutdown = func() {
 		_ = lp.Shutdown(context.Background())

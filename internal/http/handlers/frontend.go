@@ -24,11 +24,11 @@ func FrontendHandler(r chi.Router) {
 
 		index := util.Must(static.Open("200.html"))
 		defer index.Close()
-		http.ServeContent(w, r, "index.html", func() time.Time {
-			if info, err := f.Stat(); err == nil {
-				return info.ModTime()
-			}
-			return time.Now()
-		}(), index)
+
+		modTime := time.Now()
+		if info, err := index.Stat(); err == nil {
+			modTime = info.ModTime()
+		}
+		http.ServeContent(w, r, "index.html", modTime, index)
 	})
 }
