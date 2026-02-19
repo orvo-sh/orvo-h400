@@ -26,7 +26,7 @@ migrate-down:
 	@goose -dir $(PG_MIGRATIONS_DIR) postgres "${POSTGRES_URL}" down
 
 migrate-clickhouse:
-	@goose -dir $(CH_MIGRATIONS_DIR) clickhouse "clickhouse://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@${CLICKHOUSE_ADDRESS}/${CLICKHOUSE_DATABASE}" up
+	@goose -dir $(CH_MIGRATIONS_DIR) clickhouse "clickhouse://${CLICKHOUSE_URL}" up
 
 gen-openapi:
 	go run ./cmd/openapi > openapi.yaml

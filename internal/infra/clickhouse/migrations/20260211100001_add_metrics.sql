@@ -1,9 +1,8 @@
 -- +goose Up
--- +goose StatementBegin
 
 -- Raw metrics table: single wide table for all OTLP metric types (Sum, Gauge, Histogram).
 -- ExponentialHistograms are converted to regular Histograms on ingestion.
-CREATE TABLE metrics (
+CREATE TABLE IF NOT EXISTS metrics (
     organization_id String,
 
     -- Metric identity
@@ -64,7 +63,7 @@ SETTINGS
     index_granularity = 8192;
 
 -- 1-minute rollup target table
-CREATE TABLE metrics_1m (
+CREATE TABLE IF NOT EXISTS metrics_1m (
     organization_id String,
     metric_name LowCardinality (String),
     metric_type Enum8 ('sum' = 1, 'gauge' = 2, 'histogram' = 3),
@@ -81,7 +80,7 @@ CREATE TABLE metrics_1m (
     point_count SimpleAggregateFunction (sum, UInt64),
 
     -- Aggregated histogram values
-    histogram_bucket_counts SimpleAggregateFunction (sumForEach, Array (UInt64)),
+    histogram_bucket_counts SimpleAggregateFunction (anyLast, Array (UInt64)),
     histogram_count SimpleAggregateFunction (sum, UInt64),
     histogram_sum SimpleAggregateFunction (sum, Float64),
     histogram_min SimpleAggregateFunction (min, Float64),
@@ -103,7 +102,7 @@ SETTINGS
     index_granularity = 8192;
 
 -- Materialized view: raw metrics -> 1-minute rollup
-CREATE MATERIALIZED VIEW metrics_1m_mv TO metrics_1m AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS metrics_1m_mv TO metrics_1m AS
 SELECT
     organization_id,
     metric_name,
@@ -117,7 +116,7 @@ SELECT
     sum (coalesce (value_double, CAST(value_int AS Float64), 0)) AS sum_value,
     avgState (coalesce (value_double, CAST(value_int AS Float64), 0)) AS avg_value,
     count () AS point_count,
-    sumForEach (histogram_bucket_counts) AS histogram_bucket_counts,
+    anyLast (histogram_bucket_counts) AS histogram_bucket_counts,
     sum (histogram_count) AS histogram_count,
     sum (histogram_sum) AS histogram_sum,
     min (histogram_min) AS histogram_min,
@@ -134,7 +133,7 @@ GROUP BY
     time_bucket;
 
 -- 1-hour rollup target table
-CREATE TABLE metrics_1h (
+CREATE TABLE IF NOT EXISTS metrics_1h (
     organization_id String,
     metric_name LowCardinality (String),
     metric_type Enum8 ('sum' = 1, 'gauge' = 2, 'histogram' = 3),
@@ -149,7 +148,7 @@ CREATE TABLE metrics_1h (
     avg_value AggregateFunction (avg, Float64),
     point_count SimpleAggregateFunction (sum, UInt64),
 
-    histogram_bucket_counts SimpleAggregateFunction (sumForEach, Array (UInt64)),
+    histogram_bucket_counts SimpleAggregateFunction (anyLast, Array (UInt64)),
     histogram_count SimpleAggregateFunction (sum, UInt64),
     histogram_sum SimpleAggregateFunction (sum, Float64),
     histogram_min SimpleAggregateFunction (min, Float64),
@@ -171,7 +170,7 @@ SETTINGS
     index_granularity = 8192;
 
 -- Materialized view: raw metrics -> 1-hour rollup
-CREATE MATERIALIZED VIEW metrics_1h_mv TO metrics_1h AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS metrics_1h_mv TO metrics_1h AS
 SELECT
     organization_id,
     metric_name,
@@ -185,7 +184,7 @@ SELECT
     sum (coalesce (value_double, CAST(value_int AS Float64), 0)) AS sum_value,
     avgState (coalesce (value_double, CAST(value_int AS Float64), 0)) AS avg_value,
     count () AS point_count,
-    sumForEach (histogram_bucket_counts) AS histogram_bucket_counts,
+    anyLast (histogram_bucket_counts) AS histogram_bucket_counts,
     sum (histogram_count) AS histogram_count,
     sum (histogram_sum) AS histogram_sum,
     min (histogram_min) AS histogram_min,
@@ -202,7 +201,7 @@ GROUP BY
     time_bucket;
 
 -- 1-day rollup target table
-CREATE TABLE metrics_1d (
+CREATE TABLE IF NOT EXISTS metrics_1d (
     organization_id String,
     metric_name LowCardinality (String),
     metric_type Enum8 ('sum' = 1, 'gauge' = 2, 'histogram' = 3),
@@ -217,7 +216,7 @@ CREATE TABLE metrics_1d (
     avg_value AggregateFunction (avg, Float64),
     point_count SimpleAggregateFunction (sum, UInt64),
 
-    histogram_bucket_counts SimpleAggregateFunction (sumForEach, Array (UInt64)),
+    histogram_bucket_counts SimpleAggregateFunction (anyLast, Array (UInt64)),
     histogram_count SimpleAggregateFunction (sum, UInt64),
     histogram_sum SimpleAggregateFunction (sum, Float64),
     histogram_min SimpleAggregateFunction (min, Float64),
@@ -238,7 +237,7 @@ SETTINGS
     index_granularity = 8192;
 
 -- Materialized view: raw metrics -> 1-day rollup
-CREATE MATERIALIZED VIEW metrics_1d_mv TO metrics_1d AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS metrics_1d_mv TO metrics_1d AS
 SELECT
     organization_id,
     metric_name,
@@ -252,7 +251,7 @@ SELECT
     sum (coalesce (value_double, CAST(value_int AS Float64), 0)) AS sum_value,
     avgState (coalesce (value_double, CAST(value_int AS Float64), 0)) AS avg_value,
     count () AS point_count,
-    sumForEach (histogram_bucket_counts) AS histogram_bucket_counts,
+    anyLast (histogram_bucket_counts) AS histogram_bucket_counts,
     sum (histogram_count) AS histogram_count,
     sum (histogram_sum) AS histogram_sum,
     min (histogram_min) AS histogram_min,
@@ -268,10 +267,7 @@ GROUP BY
     attributes,
     time_bucket;
 
--- +goose StatementEnd
-
 -- +goose Down
--- +goose StatementBegin
 DROP VIEW IF EXISTS metrics_1d_mv;
 DROP TABLE IF EXISTS metrics_1d;
 DROP VIEW IF EXISTS metrics_1h_mv;
@@ -279,4 +275,3 @@ DROP TABLE IF EXISTS metrics_1h;
 DROP VIEW IF EXISTS metrics_1m_mv;
 DROP TABLE IF EXISTS metrics_1m;
 DROP TABLE IF EXISTS metrics;
--- +goose StatementEnd

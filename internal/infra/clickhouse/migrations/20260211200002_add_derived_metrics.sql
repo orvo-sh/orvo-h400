@@ -1,5 +1,4 @@
 -- +goose Up
--- +goose StatementBegin
 
 -- Derived RED metrics from spans.
 -- These MVs insert into the metrics table, which then feeds into the rollup
@@ -9,7 +8,7 @@
 -- Metric name: spans.request.count
 -- Type: sum (delta), monotonic
 -- Value: 1 per span
-CREATE MATERIALIZED VIEW spans_request_count_mv TO metrics AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS spans_request_count_mv TO metrics AS
 SELECT
     organization_id,
     'spans.request.count' AS metric_name,
@@ -45,7 +44,7 @@ FROM spans;
 -- Metric name: spans.error.count
 -- Type: sum (delta), monotonic
 -- Value: 1 per error span
-CREATE MATERIALIZED VIEW spans_error_count_mv TO metrics AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS spans_error_count_mv TO metrics AS
 SELECT
     organization_id,
     'spans.error.count' AS metric_name,
@@ -83,7 +82,7 @@ WHERE status_code = 2;
 -- Type: gauge
 -- Value: duration in milliseconds (float64)
 -- The raw points allow quantile computation; rollups provide min/max/avg.
-CREATE MATERIALIZED VIEW spans_duration_mv TO metrics AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS spans_duration_mv TO metrics AS
 SELECT
     organization_id,
     'spans.duration' AS metric_name,
@@ -121,7 +120,7 @@ FROM spans;
 -- Metric name: logs.record.count
 -- Type: sum (delta), monotonic
 -- Value: 1 per log record, keyed by severity
-CREATE MATERIALIZED VIEW logs_record_count_mv TO metrics AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS logs_record_count_mv TO metrics AS
 SELECT
     organization_id,
     'logs.record.count' AS metric_name,
@@ -157,7 +156,7 @@ FROM logs;
 -- Metric name: logs.error.count
 -- Type: sum (delta), monotonic
 -- severity_number >= 17 corresponds to ERROR and above (ERROR=17-20, FATAL=21-24)
-CREATE MATERIALIZED VIEW logs_error_count_mv TO metrics AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS logs_error_count_mv TO metrics AS
 SELECT
     organization_id,
     'logs.error.count' AS metric_name,
@@ -190,13 +189,9 @@ SELECT
 FROM logs
 WHERE severity_number >= 17;
 
--- +goose StatementEnd
-
 -- +goose Down
--- +goose StatementBegin
 DROP VIEW IF EXISTS logs_error_count_mv;
 DROP VIEW IF EXISTS logs_record_count_mv;
 DROP VIEW IF EXISTS spans_duration_mv;
 DROP VIEW IF EXISTS spans_error_count_mv;
 DROP VIEW IF EXISTS spans_request_count_mv;
--- +goose StatementEnd
