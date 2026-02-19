@@ -23,7 +23,6 @@ import (
 	"github.com/orvo-sh/orvo/internal/http/middleware/authmiddleware"
 	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
 	"github.com/orvo-sh/orvo/internal/infra/postgres"
-	"github.com/orvo-sh/orvo/internal/infra/redis"
 	"github.com/orvo-sh/orvo/internal/logger"
 	appotel "github.com/orvo-sh/orvo/internal/otel"
 	"github.com/orvo-sh/orvo/internal/sink"
@@ -78,13 +77,6 @@ func main() {
 		Password: cfg.Clickhouse.Password,
 	}))
 	defer clickhouse.Close()
-
-	redis := util.Must(redis.New(ctx, redis.Config{
-		Address:  cfg.Redis.Address,
-		Password: cfg.Redis.Password,
-		DB:       cfg.Redis.DB,
-	}))
-	defer redis.Close()
 
 	r := chi.NewRouter()
 

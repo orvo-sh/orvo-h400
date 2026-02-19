@@ -11,7 +11,6 @@ type Config struct {
 	App        AppConfig        `envPrefix:"APP_"`
 	Postgres   PostgresConfig   `envPrefix:"POSTGRES_"`
 	Clickhouse ClickhouseConfig `envPrefix:"CLICKHOUSE_"`
-	Redis      RedisConfig      `envPrefix:"REDIS_"`
 	Session    SessionConfig    `envPrefix:"SESSION_"`
 	Otel       OtelConfig       `envPrefix:"OTEL_"`
 }
@@ -34,12 +33,6 @@ type ClickhouseConfig struct {
 	Database string `env:"DATABASE"`
 	User     string `env:"USER"`
 	Password string `env:"PASSWORD"`
-}
-
-type RedisConfig struct {
-	Address  string `env:"ADDRESS"`
-	Password string `env:"PASSWORD"`
-	DB       int    `env:"DB"`
 }
 
 type AppConfig struct {
