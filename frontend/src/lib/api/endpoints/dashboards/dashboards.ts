@@ -91,7 +91,7 @@ export const getListDashboardsUrl = (organizationId: string,) => {
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/dashboards`
+  return `/api/v1/organizations/${organizationId}/dashboards`
 }
 
 export const listDashboards = async (organizationId: string, options?: RequestInit): Promise<listDashboardsResponse> => {
@@ -118,7 +118,7 @@ export const listDashboards = async (organizationId: string, options?: RequestIn
 
 export const getListDashboardsQueryKey = (organizationId: string,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/dashboards`
+    `/api/v1/organizations/${organizationId}/dashboards`
     ] as const;
     }
 
@@ -185,7 +185,7 @@ export const getCreateDashboardUrl = (organizationId: string,) => {
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/dashboards`
+  return `/api/v1/organizations/${organizationId}/dashboards`
 }
 
 export const createDashboard = async (organizationId: string,
@@ -277,7 +277,7 @@ export const getGetDashboardUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
+  return `/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
 }
 
 export const getDashboard = async (organizationId: string,
@@ -306,7 +306,7 @@ export const getDashboard = async (organizationId: string,
 export const getGetDashboardQueryKey = (organizationId: string,
     dashboardId: string,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
+    `/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
     ] as const;
     }
 
@@ -377,7 +377,7 @@ export const getUpdateDashboardUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
+  return `/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
 }
 
 export const updateDashboard = async (organizationId: string,
@@ -470,7 +470,7 @@ export const getDeleteDashboardUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
+  return `/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
 }
 
 export const deleteDashboard = async (organizationId: string,

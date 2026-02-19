@@ -90,7 +90,7 @@ export const getListApiKeysUrl = (organizationId: string,) => {
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/api-keys`
+  return `/api/v1/organizations/${organizationId}/api-keys`
 }
 
 export const listApiKeys = async (organizationId: string, options?: RequestInit): Promise<listApiKeysResponse> => {
@@ -117,7 +117,7 @@ export const listApiKeys = async (organizationId: string, options?: RequestInit)
 
 export const getListApiKeysQueryKey = (organizationId: string,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/api-keys`
+    `/api/v1/organizations/${organizationId}/api-keys`
     ] as const;
     }
 
@@ -184,7 +184,7 @@ export const getCreateApiKeyUrl = (organizationId: string,) => {
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/api-keys`
+  return `/api/v1/organizations/${organizationId}/api-keys`
 }
 
 export const createApiKey = async (organizationId: string,
@@ -276,7 +276,7 @@ export const getRevokeApiKeyUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/api-keys/${keyId}`
+  return `/api/v1/organizations/${organizationId}/api-keys/${keyId}`
 }
 
 export const revokeApiKey = async (organizationId: string,

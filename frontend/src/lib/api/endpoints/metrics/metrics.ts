@@ -72,7 +72,7 @@ export const getGetMetricCatalogUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/catalog?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/catalog`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/metrics/catalog?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/metrics/catalog`
 }
 
 export const getMetricCatalog = async (organizationId: string,
@@ -101,7 +101,7 @@ export const getMetricCatalog = async (organizationId: string,
 export const getGetMetricCatalogQueryKey = (organizationId: string,
     params?: GetMetricCatalogParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/catalog`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/metrics/catalog`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -179,7 +179,7 @@ export const getQueryTimeseriesUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/metrics/timeseries?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/metrics/timeseries`
 }
 
 export const queryTimeseries = async (organizationId: string,
@@ -208,7 +208,7 @@ export const queryTimeseries = async (organizationId: string,
 export const getQueryTimeseriesQueryKey = (organizationId: string,
     params?: QueryTimeseriesParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/metrics/timeseries`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -286,7 +286,7 @@ export const getGetRedMetricsUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/red?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/red`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/metrics/red?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/metrics/red`
 }
 
 export const getRedMetrics = async (organizationId: string,
@@ -315,7 +315,7 @@ export const getRedMetrics = async (organizationId: string,
 export const getGetRedMetricsQueryKey = (organizationId: string,
     params?: GetRedMetricsParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/red`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/metrics/red`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -393,7 +393,7 @@ export const getGetMetricSummaryUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/summary?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/summary`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/metrics/summary?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/metrics/summary`
 }
 
 export const getMetricSummary = async (organizationId: string,
@@ -422,7 +422,7 @@ export const getMetricSummary = async (organizationId: string,
 export const getGetMetricSummaryQueryKey = (organizationId: string,
     params?: GetMetricSummaryParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/summary`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/metrics/summary`, ...(params ? [params] : [])
     ] as const;
     }
 
