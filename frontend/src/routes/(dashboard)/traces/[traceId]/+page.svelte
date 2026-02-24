@@ -14,7 +14,8 @@
 	import { sessionStore } from '$lib/stores/session';
 	import type { Span } from '$lib/api/model';
 
-	const traceId = $derived(page.params.traceId);
+	const traceId = $derived(page.params.traceId ?? '');
+	const traceBreadcrumb = $derived(traceId ? traceId.slice(0, 8) + '...' : 'Trace');
 	const orgId = $derived($sessionStore?.active_organization?.id ?? '');
 
 	const traceQuery = createGetTrace(
@@ -85,6 +86,7 @@
 	}
 
 	function copyTraceId() {
+		if (!traceId) return;
 		navigator.clipboard.writeText(traceId);
 	}
 </script>
@@ -92,7 +94,7 @@
 <PageContainer
 	breadcrumbs={[
 		{ title: 'Traces', href: '/traces' },
-		{ title: traceId.slice(0, 8) + '...' }
+		{ title: traceBreadcrumb }
 	]}
 >
 	{#if traceQuery.isPending}

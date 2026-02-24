@@ -90,7 +90,7 @@ export const getListOrganizationsUrl = () => {
 
   
 
-  return `/api/v1/organizations`
+  return `http://localhost:8080/api/v1/organizations`
 }
 
 export const listOrganizations = async ( options?: RequestInit): Promise<listOrganizationsResponse> => {
@@ -117,7 +117,7 @@ export const listOrganizations = async ( options?: RequestInit): Promise<listOrg
 
 export const getListOrganizationsQueryKey = () => {
     return [
-    `/api/v1/organizations`
+    `http://localhost:8080/api/v1/organizations`
     ] as const;
     }
 
@@ -184,7 +184,7 @@ export const getCreateOrganizationUrl = () => {
 
   
 
-  return `/api/v1/organizations`
+  return `http://localhost:8080/api/v1/organizations`
 }
 
 export const createOrganization = async (createOrganizationInputBody: NonReadonly<CreateOrganizationInputBody>, options?: RequestInit): Promise<createOrganizationResponse> => {

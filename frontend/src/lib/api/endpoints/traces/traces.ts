@@ -70,7 +70,7 @@ export const getQueryTracesUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/traces?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/traces`
+  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/traces?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/traces`
 }
 
 export const queryTraces = async (organizationId: string,
@@ -99,7 +99,7 @@ export const queryTraces = async (organizationId: string,
 export const getQueryTracesQueryKey = (organizationId: string,
     params?: QueryTracesParams,) => {
     return [
-    `/api/v1/organizations/${organizationId}/traces`, ...(params ? [params] : [])
+    `http://localhost:8080/api/v1/organizations/${organizationId}/traces`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -169,7 +169,7 @@ export const getGetServiceMapUrl = (organizationId: string,) => {
 
   
 
-  return `/api/v1/organizations/${organizationId}/traces/service-map`
+  return `http://localhost:8080/api/v1/organizations/${organizationId}/traces/service-map`
 }
 
 export const getServiceMap = async (organizationId: string, options?: RequestInit): Promise<getServiceMapResponse> => {
@@ -196,7 +196,7 @@ export const getServiceMap = async (organizationId: string, options?: RequestIni
 
 export const getGetServiceMapQueryKey = (organizationId: string,) => {
     return [
-    `/api/v1/organizations/${organizationId}/traces/service-map`
+    `http://localhost:8080/api/v1/organizations/${organizationId}/traces/service-map`
     ] as const;
     }
 
@@ -263,7 +263,7 @@ export const getGetTraceServicesUrl = (organizationId: string,) => {
 
   
 
-  return `/api/v1/organizations/${organizationId}/traces/services`
+  return `http://localhost:8080/api/v1/organizations/${organizationId}/traces/services`
 }
 
 export const getTraceServices = async (organizationId: string, options?: RequestInit): Promise<getTraceServicesResponse> => {
@@ -290,7 +290,7 @@ export const getTraceServices = async (organizationId: string, options?: Request
 
 export const getGetTraceServicesQueryKey = (organizationId: string,) => {
     return [
-    `/api/v1/organizations/${organizationId}/traces/services`
+    `http://localhost:8080/api/v1/organizations/${organizationId}/traces/services`
     ] as const;
     }
 
@@ -357,7 +357,7 @@ export const getGetTraceSourcesUrl = (organizationId: string,) => {
 
   
 
-  return `/api/v1/organizations/${organizationId}/traces/sources`
+  return `http://localhost:8080/api/v1/organizations/${organizationId}/traces/sources`
 }
 
 export const getTraceSources = async (organizationId: string, options?: RequestInit): Promise<getTraceSourcesResponse> => {
@@ -384,7 +384,7 @@ export const getTraceSources = async (organizationId: string, options?: RequestI
 
 export const getGetTraceSourcesQueryKey = (organizationId: string,) => {
     return [
-    `/api/v1/organizations/${organizationId}/traces/sources`
+    `http://localhost:8080/api/v1/organizations/${organizationId}/traces/sources`
     ] as const;
     }
 
@@ -452,7 +452,7 @@ export const getGetTraceUrl = (organizationId: string,
 
   
 
-  return `/api/v1/organizations/${organizationId}/traces/${traceId}`
+  return `http://localhost:8080/api/v1/organizations/${organizationId}/traces/${traceId}`
 }
 
 export const getTrace = async (organizationId: string,
@@ -481,7 +481,7 @@ export const getTrace = async (organizationId: string,
 export const getGetTraceQueryKey = (organizationId: string,
     traceId: string,) => {
     return [
-    `/api/v1/organizations/${organizationId}/traces/${traceId}`
+    `http://localhost:8080/api/v1/organizations/${organizationId}/traces/${traceId}`
     ] as const;
     }
 

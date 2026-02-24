@@ -11,6 +11,7 @@ import (
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/traceservice"
 	"github.com/orvo-sh/orvo/internal/http/dto"
+	"github.com/orvo-sh/orvo/internal/http/helpers"
 	"github.com/orvo-sh/orvo/internal/http/middleware/authmiddleware"
 )
 
@@ -136,7 +137,7 @@ func (h *TraceHandler) queryTraces(ctx context.Context, input *dto.QueryTracesIn
 
 	result, err := h.traceService.QueryTraces(ctx, svcInput)
 	if err != nil {
-		return nil, err
+		return nil, helpers.ToHTTPError(err)
 	}
 
 	return &dto.QueryTracesOutput{
@@ -153,7 +154,7 @@ func (h *TraceHandler) queryTraces(ctx context.Context, input *dto.QueryTracesIn
 func (h *TraceHandler) getTrace(ctx context.Context, input *dto.GetTraceInput) (*dto.GetTraceOutput, error) {
 	result, err := h.traceService.GetTrace(ctx, input.OrganizationID, input.TraceID)
 	if err != nil {
-		return nil, err
+		return nil, helpers.ToHTTPError(err)
 	}
 
 	return &dto.GetTraceOutput{
@@ -168,7 +169,7 @@ func (h *TraceHandler) getTrace(ctx context.Context, input *dto.GetTraceInput) (
 func (h *TraceHandler) getServices(ctx context.Context, input *dto.GetTraceServicesInput) (*dto.GetTraceServicesOutput, error) {
 	services, err := h.traceService.GetServices(ctx, input.OrganizationID)
 	if err != nil {
-		return nil, err
+		return nil, helpers.ToHTTPError(err)
 	}
 
 	return &dto.GetTraceServicesOutput{
@@ -183,7 +184,7 @@ func (h *TraceHandler) getServices(ctx context.Context, input *dto.GetTraceServi
 func (h *TraceHandler) getServiceMap(ctx context.Context, input *dto.GetServiceMapInput) (*dto.GetServiceMapOutput, error) {
 	edges, err := h.traceService.GetServiceMap(ctx, input.OrganizationID)
 	if err != nil {
-		return nil, err
+		return nil, helpers.ToHTTPError(err)
 	}
 
 	return &dto.GetServiceMapOutput{
@@ -198,7 +199,7 @@ func (h *TraceHandler) getServiceMap(ctx context.Context, input *dto.GetServiceM
 func (h *TraceHandler) getSources(ctx context.Context, input *dto.GetSourcesInput) (*dto.GetSourcesOutput, error) {
 	sources, err := h.traceService.GetSources(ctx, input.OrganizationID)
 	if err != nil {
-		return nil, err
+		return nil, helpers.ToHTTPError(err)
 	}
 
 	return &dto.GetSourcesOutput{

@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import PageContainer from '../_components/page-container/page-container.svelte';
 	import { Separator } from '$lib/components/ui/separator/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Alert from '$lib/components/ui/alert/index.js';
 	import ActivityIcon from '@lucide/svelte/icons/activity';
 	import TraceFilters from './_components/trace-filters.svelte';
 	import TraceList from './_components/trace-list.svelte';
@@ -10,6 +12,13 @@
 		createGetTraceServices,
 		queryTraces
 	} from '$lib/api/endpoints/traces/traces';
+	import {
+		createRestoreJob,
+		getRestoreJob,
+		parseRestoreRequired,
+		type RestoreJob,
+		type RestoreRequiredInfo
+	} from '$lib/archive/restore';
 	import { sessionStore } from '$lib/stores/session';
 	import type { TraceSummary } from '$lib/api/model';
 
@@ -27,6 +36,12 @@
 	let extraTraces = $state<TraceSummary[]>([]);
 	let nextCursor = $state<string | undefined>(undefined);
 	let isLoadingMore = $state(false);
+	let restoreRequired = $state<RestoreRequiredInfo | null>(null);
+	let restoreJob = $state<RestoreJob | null>(null);
+	let isStartingRestore = $state(false);
+	let isPollingRestore = $state(false);
+	let restorePollingJobID = $state<string | undefined>(undefined);
+	let restoreError = $state<string | undefined>(undefined);
 
 	// Committed search -- only updates on Enter
 	let committedSearch = $state('');
@@ -42,7 +57,9 @@
 		'6h': 6 * 60 * 60 * 1000,
 		'12h': 12 * 60 * 60 * 1000,
 		'24h': 24 * 60 * 60 * 1000,
-		'7d': 7 * 24 * 60 * 60 * 1000
+		'7d': 7 * 24 * 60 * 60 * 1000,
+		'14d': 14 * 24 * 60 * 60 * 1000,
+		'30d': 30 * 24 * 60 * 60 * 1000
 	};
 
 	function computeTimeRange(range: string): { start: string; end: string } {
@@ -64,6 +81,7 @@
 		queryEnd = range.end;
 		extraTraces = [];
 		nextCursor = undefined;
+		restoreError = undefined;
 	}
 
 	// Re-run when dropdown filters change
@@ -115,6 +133,24 @@
 		}
 	});
 
+	$effect(() => {
+		const resp = tracesQuery.data;
+		if (!resp) {
+			return;
+		}
+		if (resp.status === 409) {
+			const parsed = parseRestoreRequired(resp.data);
+			restoreRequired = parsed;
+			if (parsed?.jobId && (parsed.jobState === 'queued' || parsed.jobState === 'running')) {
+				void pollRestoreJob(parsed.jobId);
+			}
+			return;
+		}
+		if (resp.status === 200) {
+			restoreRequired = null;
+		}
+	});
+
 	const allTraces = $derived([...firstPageTraces, ...extraTraces]);
 	const hasMore = $derived(!!nextCursor);
 
@@ -148,6 +184,62 @@
 			}
 		} finally {
 			isLoadingMore = false;
+		}
+	}
+
+	async function startRestore() {
+		if (!restoreRequired || !orgId || isStartingRestore || isPollingRestore) return;
+		const confirmed = window.confirm(
+			`Restore archived ${restoreRequired.signal} for ${restoreRequired.startDay} to ${restoreRequired.endDay}?`
+		);
+		if (!confirmed) return;
+
+		isStartingRestore = true;
+		restoreError = undefined;
+		try {
+			restoreJob = await createRestoreJob(
+				orgId,
+				restoreRequired.signal,
+				restoreRequired.startDay,
+				restoreRequired.endDay
+			);
+			await pollRestoreJob(restoreJob.id);
+		} catch (error) {
+			restoreError = error instanceof Error ? error.message : 'failed to start restore job';
+		} finally {
+			isStartingRestore = false;
+		}
+	}
+
+	async function pollRestoreJob(jobID: string) {
+		if (!orgId || !jobID || restorePollingJobID === jobID) return;
+
+		restorePollingJobID = jobID;
+		isPollingRestore = true;
+		restoreError = undefined;
+		try {
+			for (let attempt = 0; attempt < 120; attempt++) {
+				restoreJob = await getRestoreJob(orgId, jobID);
+
+				if (restoreJob.state === 'completed') {
+					restoreRequired = null;
+					refreshQueries();
+					return;
+				}
+				if (restoreJob.state === 'failed') {
+					restoreError = restoreJob.error || 'restore job failed';
+					return;
+				}
+
+				await new Promise((resolve) => setTimeout(resolve, 3000));
+			}
+
+			restoreError = 'restore job is still running';
+		} catch (error) {
+			restoreError = error instanceof Error ? error.message : 'failed to poll restore status';
+		} finally {
+			isPollingRestore = false;
+			restorePollingJobID = undefined;
 		}
 	}
 
@@ -186,6 +278,36 @@
 			{services}
 			onSearch={handleSearch}
 		/>
+
+		{#if restoreRequired}
+			<Alert.Root class="border-amber-400/40 bg-amber-50/40 dark:bg-amber-950/20">
+				<Alert.Title>Archived trace data required</Alert.Title>
+				<Alert.Description>
+					Requested range includes archived days:
+					{restoreRequired.missingDays.join(', ') ||
+						`${restoreRequired.startDay} to ${restoreRequired.endDay}`}.
+				</Alert.Description>
+				<div class="mt-3 flex flex-wrap items-center gap-2">
+					<Button size="sm" onclick={startRestore} disabled={isStartingRestore || isPollingRestore}>
+						{#if isStartingRestore}
+							Starting restore...
+						{:else if isPollingRestore}
+							Restoring...
+						{:else}
+							Restore Archived Days
+						{/if}
+					</Button>
+					{#if restoreJob}
+						<span class="text-xs text-muted-foreground">
+							{restoreJob.completed_items}/{restoreJob.total_items} objects restored
+						</span>
+					{/if}
+					{#if restoreError}
+						<span class="text-xs text-destructive">{restoreError}</span>
+					{/if}
+				</div>
+			</Alert.Root>
+		{/if}
 
 		<!-- Trace List -->
 		<div class="min-h-0 flex-1">

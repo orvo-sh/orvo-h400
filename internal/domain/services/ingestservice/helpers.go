@@ -33,13 +33,13 @@ func (s *service) transformLogs(resourceLogs []*logspb.ResourceLogs, orgID strin
 				timestamp := util.NanoToTime(lr.GetTimeUnixNano())
 				observedTimestamp := util.NanoToTime(lr.GetObservedTimeUnixNano())
 
-				// If timestamp is zero, use observed timestamp.
-				if timestamp.IsZero() {
-					timestamp = observedTimestamp
-				}
 				// If observed timestamp is zero, use now.
 				if observedTimestamp.IsZero() {
 					observedTimestamp = time.Now().UTC()
+				}
+				// If timestamp is zero, use observed timestamp.
+				if timestamp.IsZero() {
+					timestamp = observedTimestamp
 				}
 
 				records = append(records, models.LogRecord{

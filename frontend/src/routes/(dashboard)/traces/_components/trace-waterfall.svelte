@@ -244,12 +244,20 @@
 			{@const isError = row.span.status_code === 2}
 			{@const isSelected = row.span.span_id === selectedSpanId}
 
-			<button
-				class="flex w-full items-center transition-colors hover:bg-muted/40 {isSelected
-					? 'bg-muted/60'
-					: ''}"
-				onclick={() => onSelectSpan(row.span)}
-			>
+				<div
+					role="button"
+					tabindex="0"
+					class="flex w-full items-center transition-colors hover:bg-muted/40 {isSelected
+						? 'bg-muted/60'
+						: ''}"
+					onclick={() => onSelectSpan(row.span)}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							onSelectSpan(row.span);
+						}
+					}}
+				>
 				<!-- Span name column -->
 				<div
 					class="flex w-[320px] shrink-0 items-center gap-1 overflow-hidden border-r px-2 py-1.5"
@@ -294,7 +302,7 @@
 						label={formatDuration(row.span.duration_ns)}
 					/>
 				</div>
-			</button>
-		{/each}
+				</div>
+			{/each}
+		</div>
 	</div>
-</div>

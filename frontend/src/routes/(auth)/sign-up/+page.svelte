@@ -5,13 +5,12 @@
 	import { IconBrandGoogle } from '@tabler/icons-svelte';
 
 	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Logo } from '$lib/components/ui/logo';
 	import { register } from '$lib/api/endpoints/auth/auth';
 	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 
 	let error = $state('');
 
@@ -23,7 +22,7 @@
 		},
 		{
 			SPA: true,
-			validators: zodClient(
+			validators: zod4Client(
 				z.object({
 					name: z.string().min(2).max(32),
 					email: z.string().email(),
@@ -115,12 +114,10 @@
 			>
 				<IconBrandGoogle class="size-5" />continue with Google</Button
 			>
-			{#if page.params.auth == 'sign-up'}
-				<span class="text-muted-foreground -mt-3 mb-1 text-center text-sm"
-					>by continuing, you agree to our <a href="/" class="a">terms & conditions</a>
-					and <a href="/" class="a">privacy policy</a>.</span
-				>
-			{/if}
+			<span class="text-muted-foreground -mt-3 mb-1 text-center text-sm"
+				>by continuing, you agree to our <a href="/" class="a">terms & conditions</a>
+				and <a href="/" class="a">privacy policy</a>.</span
+			>
 		</div>
 		<div class="relative mt-6 flex flex-col gap-2">
 			<a class="a text-center text-sm" href="/sign-in">already have an account?</a>

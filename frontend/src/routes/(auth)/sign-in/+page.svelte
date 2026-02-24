@@ -10,7 +10,7 @@
 	import { Logo } from '$lib/components/ui/logo';
 	import { login } from '$lib/api/endpoints/auth/auth';
 	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 
 	let error = $state('');
 
@@ -21,7 +21,7 @@
 		},
 		{
 			SPA: true,
-			validators: zodClient(
+			validators: zod4Client(
 				z.object({
 					email: z.string().email(),
 					password: z.string().min(1)

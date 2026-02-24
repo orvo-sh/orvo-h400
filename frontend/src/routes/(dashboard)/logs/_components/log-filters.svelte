@@ -25,9 +25,7 @@
 		onSearch?: () => void;
 	} = $props();
 
-	const serviceOptions = $derived(
-		serviceNames.map((s) => ({ value: s, label: s }))
-	);
+	const serviceOptions = $derived(serviceNames.map((s) => ({ value: s, label: s })));
 
 	const levels: { value: LogLevel; label: string }[] = [
 		{ value: 'debug', label: 'Debug' },
@@ -45,7 +43,9 @@
 		{ value: '6h', label: '6 hours' },
 		{ value: '12h', label: '12 hours' },
 		{ value: '24h', label: '24 hours' },
-		{ value: '7d', label: '7 days' }
+		{ value: '7d', label: '7 days' },
+		{ value: '14d', label: '14 days' },
+		{ value: '30d', label: '30 days' }
 	];
 
 	function clearFilters() {

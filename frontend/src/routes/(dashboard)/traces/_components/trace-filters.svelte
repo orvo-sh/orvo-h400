@@ -44,7 +44,9 @@
 		{ value: '6h', label: '6 hours' },
 		{ value: '12h', label: '12 hours' },
 		{ value: '24h', label: '24 hours' },
-		{ value: '7d', label: '7 days' }
+		{ value: '7d', label: '7 days' },
+		{ value: '14d', label: '14 days' },
+		{ value: '30d', label: '30 days' }
 	];
 
 	function clearFilters() {
@@ -123,9 +125,7 @@
 
 	<!-- Search Input -->
 	<div class="relative min-w-[250px] flex-1">
-		<SearchIcon
-			class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-		/>
+		<SearchIcon class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
 		<Input
 			bind:value={searchQuery}
 			placeholder={'Search span names...'}
@@ -139,8 +139,7 @@
 		<Select.Trigger class="w-[100px]" size="sm">
 			<CalendarIcon class="size-4" />
 			<span
-				>{timeRanges.find((t) => t.value === selectedTimeRange)?.label.split(' ')[0] ||
-					'1H'}</span
+				>{timeRanges.find((t) => t.value === selectedTimeRange)?.label.split(' ')[0] || '1H'}</span
 			>
 		</Select.Trigger>
 		<Select.Content>

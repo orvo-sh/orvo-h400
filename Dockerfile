@@ -39,14 +39,13 @@ RUN apk add --no-cache ca-certificates \
 COPY --from=builder /out/orvo ./orvo
 COPY --from=builder /out/goose /usr/local/bin/goose
 COPY --from=builder /src/internal/infra/postgres/migrations ./migrations/postgres
-COPY --from=builder /src/internal/infra/clickhouse/migrations ./migrations/clickhouse
 COPY scripts/migrate.sh ./migrate.sh
 RUN chmod +x /app/migrate.sh && chown -R app:app /app
 
 ENV APP_ENVIRONMENT=production
 ENV APP_APP_PORT=8080
 
-EXPOSE 8080
+EXPOSE 8080 4317 4318
 
 USER app
 ENTRYPOINT ["./orvo"]

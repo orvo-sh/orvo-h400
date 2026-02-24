@@ -1,4 +1,4 @@
-package main
+package ingest
 
 import (
 	"context"
@@ -8,22 +8,12 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
-	"time"
 
-	"github.com/joho/godotenv"
-	"github.com/lmittmann/tint"
-	"github.com/orvo-sh/orvo/internal/config"
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/ingestservice"
-	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
 	"github.com/orvo-sh/orvo/internal/infra/postgres"
 	"github.com/orvo-sh/orvo/internal/sink"
-	"github.com/orvo-sh/orvo/pkg/background"
-	"github.com/orvo-sh/orvo/pkg/util"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	collectorlogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
@@ -33,137 +23,140 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	godotenv.Load(".env")
-
-	cfg := util.Must(config.Load())
-
-	logger := slog.New(tint.NewHandler(os.Stdout, &tint.Options{})).With(
-		slog.String("service", "ingest"),
-		slog.String("environment", cfg.App.Environment),
-	)
-
-	pg := util.Must(postgres.New(ctx, postgres.Config{
-		URL: cfg.Postgres.URL,
-	}))
-	defer pg.Close()
-
-	ch := util.Must(clickhouse.New(ctx, clickhouse.Config{
-		URL: cfg.Clickhouse.URL,
-	}))
-	defer ch.Close()
-
-	backgroundManager := background.New(logger, background.Config{
-		DefaultTimeout: 30 * time.Second,
-	})
-
-	authService := authservice.New(pg, logger, backgroundManager, authservice.Config{
-		SessionExpiresIn:       7 * 24 * time.Hour,
-		SessionUpdateAge:       24 * time.Hour,
-		ApiKeyCacheResolverTTL: 60 * time.Second,
-	})
-
-	logSink := sink.NewLogSink(ch, logger)
-	spanSink := sink.NewSpanSink(ch, logger)
-	metricSink := sink.NewMetricSink(ch, logger)
-
-	ingestService := ingestservice.New(logSink, spanSink, metricSink, logger)
-
-	grpcServer := grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-	)
-	collectorlogspb.RegisterLogsServiceServer(grpcServer, &grpcLogHandler{
-		authService:   authService,
-		ingestService: ingestService,
-		logger:        logger,
-	})
-	collectortracepb.RegisterTraceServiceServer(grpcServer, &grpcTraceHandler{
-		authService:   authService,
-		ingestService: ingestService,
-		logger:        logger,
-	})
-	collectormetricspb.RegisterMetricsServiceServer(grpcServer, &grpcMetricHandler{
-		authService:   authService,
-		ingestService: ingestService,
-		logger:        logger,
-	})
-
-	grpcListener := util.Must(net.Listen("tcp", ":4317"))
-	go func() {
-		logger.Info("OTLP/gRPC receiver listening on :4317")
-		if err := grpcServer.Serve(grpcListener); err != nil {
-			logger.Error("gRPC server error", slog.Any("error", err))
-		}
-	}()
-
-	httpMux := http.NewServeMux()
-	httpLogH := &httpLogHandler{
-		authService:   authService,
-		ingestService: ingestService,
-		logger:        logger,
-	}
-	httpTraceH := &httpTraceHandler{
-		authService:   authService,
-		ingestService: ingestService,
-		logger:        logger,
-	}
-	httpMetricH := &httpMetricHandler{
-		authService:   authService,
-		ingestService: ingestService,
-		logger:        logger,
-	}
-	httpMux.Handle("/v1/logs", httpLogH)
-	httpMux.Handle("/v1/traces", httpTraceH)
-	httpMux.Handle("/v1/metrics", httpMetricH)
-	httpMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OK"))
-	})
-
-	httpServer := &http.Server{
-		Addr:    ":4318",
-		Handler: otelhttp.NewHandler(httpMux, "ingest.http"),
-	}
-	go func() {
-		logger.Info("OTLP/HTTP receiver listening on :4318")
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("HTTP server error", slog.Any("error", err))
-		}
-	}()
-
-	// Graceful shutdown.
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	logger.Info("shutting down ingest service...")
-
-	grpcServer.GracefulStop()
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer shutdownCancel()
-	httpServer.Shutdown(shutdownCtx)
-
-	if err := logSink.Close(); err != nil {
-		logger.Error("failed to close log sink", slog.Any("error", err))
-	}
-	if err := spanSink.Close(); err != nil {
-		logger.Error("failed to close span sink", slog.Any("error", err))
-	}
-	if err := metricSink.Close(); err != nil {
-		logger.Error("failed to close metric sink", slog.Any("error", err))
-	}
-
-	logger.Info("ingest service stopped")
+type ServerConfig struct {
+	EnableGRPC bool
+	EnableHTTP bool
+	GRPCPort   string
+	HTTPPort   string
 }
 
-func shouldLoadDotEnv() bool {
-	environment := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENVIRONMENT")))
-	return environment == "" || environment == "development" || environment == "dev" || environment == "local"
+type Server struct {
+	logger        *slog.Logger
+	logSink       *sink.LogSink
+	spanSink      *sink.SpanSink
+	metricSink    *sink.MetricSink
+	grpcServer    *grpc.Server
+	grpcListener  net.Listener
+	httpServer    *http.Server
+	ingestService ingestservice.Service
+}
+
+func NewServer(pg *postgres.DB, authService authservice.Service, logger *slog.Logger, cfg ServerConfig) (*Server, error) {
+	if cfg.GRPCPort == "" {
+		cfg.GRPCPort = "4317"
+	}
+	if cfg.HTTPPort == "" {
+		cfg.HTTPPort = "4318"
+	}
+
+	server := &Server{
+		logger: logger.With("component", "ingest"),
+	}
+
+	server.logSink = sink.NewLogSink(pg, logger)
+	server.spanSink = sink.NewSpanSink(pg, logger)
+	server.metricSink = sink.NewMetricSink(pg, logger)
+	server.ingestService = ingestservice.New(server.logSink, server.spanSink, server.metricSink, logger)
+
+	if cfg.EnableGRPC {
+		server.grpcServer = grpc.NewServer(
+			grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		)
+		collectorlogspb.RegisterLogsServiceServer(server.grpcServer, &grpcLogHandler{
+			authService:   authService,
+			ingestService: server.ingestService,
+			logger:        logger,
+		})
+		collectortracepb.RegisterTraceServiceServer(server.grpcServer, &grpcTraceHandler{
+			authService:   authService,
+			ingestService: server.ingestService,
+			logger:        logger,
+		})
+		collectormetricspb.RegisterMetricsServiceServer(server.grpcServer, &grpcMetricHandler{
+			authService:   authService,
+			ingestService: server.ingestService,
+			logger:        logger,
+		})
+
+		listener, err := net.Listen("tcp", ":"+cfg.GRPCPort)
+		if err != nil {
+			return nil, fmt.Errorf("listen otlp grpc on %s: %w", cfg.GRPCPort, err)
+		}
+		server.grpcListener = listener
+	}
+
+	if cfg.EnableHTTP {
+		httpMux := http.NewServeMux()
+		httpMux.Handle("/v1/logs", &httpLogHandler{
+			authService:   authService,
+			ingestService: server.ingestService,
+			logger:        logger,
+		})
+		httpMux.Handle("/v1/traces", &httpTraceHandler{
+			authService:   authService,
+			ingestService: server.ingestService,
+			logger:        logger,
+		})
+		httpMux.Handle("/v1/metrics", &httpMetricHandler{
+			authService:   authService,
+			ingestService: server.ingestService,
+			logger:        logger,
+		})
+		httpMux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+			w.Write([]byte("OK"))
+		})
+
+		server.httpServer = &http.Server{
+			Addr:    ":" + cfg.HTTPPort,
+			Handler: otelhttp.NewHandler(httpMux, "ingest.http"),
+		}
+	}
+
+	return server, nil
+}
+
+func (s *Server) Start() {
+	if s.grpcServer != nil && s.grpcListener != nil {
+		go func() {
+			s.logger.Info("OTLP/gRPC receiver listening", slog.String("addr", s.grpcListener.Addr().String()))
+			if err := s.grpcServer.Serve(s.grpcListener); err != nil {
+				s.logger.Error("gRPC ingest server stopped", slog.Any("error", err))
+			}
+		}()
+	}
+
+	if s.httpServer != nil {
+		go func() {
+			s.logger.Info("OTLP/HTTP receiver listening", slog.String("addr", s.httpServer.Addr))
+			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				s.logger.Error("HTTP ingest server stopped", slog.Any("error", err))
+			}
+		}()
+	}
+}
+
+func (s *Server) Shutdown(ctx context.Context) {
+	if s.grpcServer != nil {
+		s.grpcServer.GracefulStop()
+	}
+	if s.httpServer != nil {
+		if err := s.httpServer.Shutdown(ctx); err != nil {
+			s.logger.Warn("failed to shutdown ingest HTTP server", slog.Any("error", err))
+		}
+	}
+	if err := s.logSink.Close(); err != nil {
+		s.logger.Warn("failed to close log sink", slog.Any("error", err))
+	}
+	if err := s.spanSink.Close(); err != nil {
+		s.logger.Warn("failed to close span sink", slog.Any("error", err))
+	}
+	if err := s.metricSink.Close(); err != nil {
+		s.logger.Warn("failed to close metric sink", slog.Any("error", err))
+	}
 }
 
 // extractApiKey pulls the API key from Authorization header or x-api-key.
@@ -216,6 +209,13 @@ func resolveOrgFromHTTP(r *http.Request, authService authservice.Service) (strin
 		return "", fmt.Errorf("invalid API key")
 	}
 	return *orgID, nil
+}
+
+func unmarshalOTLPJSON(body []byte, msg proto.Message) error {
+	options := protojson.UnmarshalOptions{
+		DiscardUnknown: true,
+	}
+	return options.Unmarshal(body, msg)
 }
 
 // --- gRPC Log handler ---
@@ -305,7 +305,7 @@ func (h *httpLogHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case strings.Contains(contentType, "application/json"):
-		if err := json.Unmarshal(body, req); err != nil {
+		if err := unmarshalOTLPJSON(body, req); err != nil {
 			http.Error(w, "failed to unmarshal json", http.StatusBadRequest)
 			return
 		}
@@ -375,7 +375,7 @@ func (h *httpTraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case strings.Contains(contentType, "application/json"):
-		if err := json.Unmarshal(body, req); err != nil {
+		if err := unmarshalOTLPJSON(body, req); err != nil {
 			http.Error(w, "failed to unmarshal json", http.StatusBadRequest)
 			return
 		}
@@ -469,7 +469,7 @@ func (h *httpMetricHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case strings.Contains(contentType, "application/json"):
-		if err := json.Unmarshal(body, req); err != nil {
+		if err := unmarshalOTLPJSON(body, req); err != nil {
 			http.Error(w, "failed to unmarshal json", http.StatusBadRequest)
 			return
 		}

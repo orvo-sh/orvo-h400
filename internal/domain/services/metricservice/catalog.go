@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/orvo-sh/orvo/internal/domain/errs"
 	"github.com/orvo-sh/orvo/internal/domain/models"
@@ -17,39 +18,72 @@ func (s *service) GetMetricCatalog(ctx context.Context, input GetMetricCatalogIn
 		slog.String("service_name", input.ServiceName),
 	)
 
-	var (
-		clauses []string
-		args    []any
-	)
+	args := &metricSQLBuilder{}
+	cutoff := time.Now().Add(-24 * time.Hour)
 
-	clauses = append(clauses, "organization_id = ?")
-	args = append(args, input.OrganizationID)
+	hotWhere := []string{
+		fmt.Sprintf("m.organization_id = %s", args.add(input.OrganizationID)),
+		fmt.Sprintf("m.time >= %s", args.add(cutoff)),
+	}
+	restoredWhere := []string{
+		fmt.Sprintf("r.organization_id = %s", args.add(input.OrganizationID)),
+		fmt.Sprintf("r.time >= %s", args.add(cutoff)),
+	}
 
 	if input.ServiceName != "" {
-		clauses = append(clauses, "service_name = ?")
-		args = append(args, input.ServiceName)
+		hotWhere = append(hotWhere, fmt.Sprintf("m.service_name = %s", args.add(input.ServiceName)))
+		restoredWhere = append(restoredWhere, fmt.Sprintf("r.service_name = %s", args.add(input.ServiceName)))
 	}
-
 	if input.SearchQuery != "" {
-		clauses = append(clauses, "metric_name ILIKE ?")
-		args = append(args, "%"+input.SearchQuery+"%")
+		search := "%" + input.SearchQuery + "%"
+		hotWhere = append(hotWhere, fmt.Sprintf("m.metric_name ILIKE %s", args.add(search)))
+		restoredWhere = append(restoredWhere, fmt.Sprintf("r.metric_name ILIKE %s", args.add(search)))
 	}
 
-	where := strings.Join(clauses, " AND ")
+	query := fmt.Sprintf(`WITH unioned AS (
+		SELECT
+			m.id,
+			m.organization_id,
+			m.metric_name,
+			m.metric_type,
+			m.metric_unit,
+			m.metric_description,
+			m.service_name,
+			m.time
+		FROM metrics_hot m
+		WHERE %s
 
-	query := fmt.Sprintf(`SELECT
+		UNION ALL
+
+		SELECT
+			r.id,
+			r.organization_id,
+			r.metric_name,
+			r.metric_type,
+			r.metric_unit,
+			r.metric_description,
+			r.service_name,
+			r.time
+		FROM metrics_restored r
+		WHERE %s
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM metrics_hot h
+			WHERE h.organization_id = r.organization_id
+			  AND h.id = r.id
+		  )
+	)
+	SELECT
 		metric_name,
-		any(metric_type) AS metric_type,
-		any(metric_unit) AS metric_unit,
-		any(metric_description) AS metric_description,
-		any(service_name) AS service_name
-	FROM metrics
-	WHERE %s
-	  AND time > now() - INTERVAL 24 HOUR
+		min(metric_type)::INT AS metric_type,
+		min(metric_unit) AS metric_unit,
+		min(metric_description) AS metric_description,
+		min(service_name) AS service_name
+	FROM unioned
 	GROUP BY metric_name
-	ORDER BY metric_name ASC`, where)
+	ORDER BY metric_name ASC`, strings.Join(hotWhere, " AND "), strings.Join(restoredWhere, " AND "))
 
-	rows, err := s.ch.Query(ctx, query, args...)
+	rows, err := s.pg.Pool().Query(ctx, query, args.args...)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "GetMetricCatalog: query failed", slog.Any("error", err))
 		return nil, errs.ErrInternal
@@ -59,10 +93,12 @@ func (s *service) GetMetricCatalog(ctx context.Context, input GetMetricCatalogIn
 	var metrics []models.MetricMeta
 	for rows.Next() {
 		var m models.MetricMeta
-		if err := rows.Scan(&m.Name, &m.Type, &m.Unit, &m.Description, &m.ServiceName); err != nil {
+		var metricType int
+		if err := rows.Scan(&m.Name, &metricType, &m.Unit, &m.Description, &m.ServiceName); err != nil {
 			s.logger.ErrorContext(ctx, "GetMetricCatalog: scan failed", slog.Any("error", err))
 			return nil, errs.ErrInternal
 		}
+		m.Type = metricTypeToString(metricType)
 		metrics = append(metrics, m)
 	}
 	if err := rows.Err(); err != nil {
@@ -71,4 +107,17 @@ func (s *service) GetMetricCatalog(ctx context.Context, input GetMetricCatalogIn
 	}
 
 	return &GetMetricCatalogOutput{Metrics: metrics}, nil
+}
+
+func metricTypeToString(metricType int) string {
+	switch metricType {
+	case 1:
+		return "sum"
+	case 2:
+		return "gauge"
+	case 3:
+		return "histogram"
+	default:
+		return "unknown"
+	}
 }

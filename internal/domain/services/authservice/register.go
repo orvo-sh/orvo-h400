@@ -3,6 +3,7 @@ package authservice
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -32,7 +33,7 @@ func (s *service) Register(ctx context.Context, input RegisterInput) (*models.Se
 	var session models.Session
 
 	err := s.postgres.WithTx(ctx, func(q *postgres.Queries) error {
-		user, err := s.postgres.Queries.CreateUser(ctx, db.CreateUserParams{
+		user, err := q.CreateUser(ctx, db.CreateUserParams{
 			ID:            util.GenerateID("usr"),
 			Email:         input.Email,
 			EmailVerified: false,
@@ -52,7 +53,7 @@ func (s *service) Register(ctx context.Context, input RegisterInput) (*models.Se
 			return errs.ErrInternal
 		}
 
-		if _, err = s.postgres.Queries.CreateAccount(ctx, db.CreateAccountParams{
+		if _, err = q.CreateAccount(ctx, db.CreateAccountParams{
 			ID:                util.GenerateID("acc"),
 			UserID:            user.ID,
 			Provider:          string(models.AccountProviderEmail),
@@ -63,11 +64,34 @@ func (s *service) Register(ctx context.Context, input RegisterInput) (*models.Se
 			return errs.ErrInternal
 		}
 
-		dbSession, err := s.postgres.Queries.CreateSession(ctx, db.CreateSessionParams{
+		orgID := util.GenerateID("org")
+		orgSlug := "org-" + strings.TrimPrefix(orgID, "org_")
+		if _, err = q.CreateOrganization(ctx, db.CreateOrganizationParams{
+			ID:       orgID,
+			Name:     defaultOrganizationName(input.Name),
+			Slug:     orgSlug,
+			Logo:     pgutil.NullText(),
+			Metadata: []byte("{}"),
+		}); err != nil {
+			s.logger.ErrorContext(ctx, "Register: failed to create default organization", slog.Any("error", err))
+			return errs.ErrInternal
+		}
+
+		if _, err = q.CreateOrganizationMember(ctx, db.CreateOrganizationMemberParams{
+			ID:             util.GenerateID("mem"),
+			OrganizationID: orgID,
+			UserID:         user.ID,
+			Role:           string(models.OrganizationMemberRoleOwner),
+		}); err != nil {
+			s.logger.ErrorContext(ctx, "Register: failed to create default organization membership", slog.Any("error", err))
+			return errs.ErrInternal
+		}
+
+		dbSession, err := q.CreateSession(ctx, db.CreateSessionParams{
 			ID:                   util.GenerateID("ses"),
 			Token:                util.GenerateRandomString(),
 			UserID:               user.ID,
-			ActiveOrganizationID: pgutil.Text(input.ActiveOrganizationID),
+			ActiveOrganizationID: pgutil.Text(&orgID),
 			IpAddress:            pgutil.Text(input.IpAddress),
 			UserAgent:            pgutil.Text(input.UserAgent),
 			ExpiresAt:            pgutil.Timestamptz(time.Now().Add(s.config.SessionExpiresIn)),
@@ -100,4 +124,15 @@ func (s *service) Register(ctx context.Context, input RegisterInput) (*models.Se
 	}
 
 	return &session, nil
+}
+
+func defaultOrganizationName(userName string) string {
+	name := strings.TrimSpace(userName)
+	if name == "" {
+		return "My Organization"
+	}
+	if strings.HasSuffix(strings.ToLower(name), "s") {
+		return name + "' Organization"
+	}
+	return name + "'s Organization"
 }

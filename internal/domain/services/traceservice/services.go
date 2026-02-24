@@ -11,13 +11,39 @@ import (
 func (s *service) GetServices(ctx context.Context, organizationID string) ([]string, apperr.Error) {
 	s.logger.InfoContext(ctx, "GetServices: getting services from spans", slog.String("organization_id", organizationID))
 
-	query := `SELECT DISTINCT service_name
-		FROM spans
-		WHERE organization_id = ?
-		  AND start_time > now() - INTERVAL 24 HOUR
-		ORDER BY service_name ASC`
+	query := `WITH unioned AS (
+		SELECT
+			t.id,
+			t.organization_id,
+			t.service_name,
+			t.start_time
+		FROM traces_hot t
+		WHERE t.organization_id = $1
+		  AND t.start_time > NOW() - INTERVAL '24 hours'
 
-	rows, err := s.ch.Query(ctx, query, organizationID)
+		UNION ALL
+
+		SELECT
+			r.id,
+			r.organization_id,
+			r.service_name,
+			r.start_time
+		FROM traces_restored r
+		WHERE r.organization_id = $1
+		  AND r.start_time > NOW() - INTERVAL '24 hours'
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM traces_hot h
+			WHERE h.organization_id = r.organization_id
+			  AND h.id = r.id
+		  )
+	)
+	SELECT DISTINCT service_name
+	FROM unioned
+	WHERE service_name != ''
+	ORDER BY service_name ASC`
+
+	rows, err := s.pg.Pool().Query(ctx, query, organizationID)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "GetServices: query failed", slog.Any("error", err))
 		return nil, errs.ErrInternal

@@ -69,7 +69,7 @@ export const getQueryLogsUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/logs?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/logs`
+  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/logs?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/logs`
 }
 
 export const queryLogs = async (organizationId: string,
@@ -98,7 +98,7 @@ export const queryLogs = async (organizationId: string,
 export const getQueryLogsQueryKey = (organizationId: string,
     params?: QueryLogsParams,) => {
     return [
-    `/api/v1/organizations/${organizationId}/logs`, ...(params ? [params] : [])
+    `http://localhost:8080/api/v1/organizations/${organizationId}/logs`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -176,7 +176,7 @@ export const getGetLogHistogramUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/logs/histogram?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/logs/histogram`
+  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/logs/histogram?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/logs/histogram`
 }
 
 export const getLogHistogram = async (organizationId: string,
@@ -205,7 +205,7 @@ export const getLogHistogram = async (organizationId: string,
 export const getGetLogHistogramQueryKey = (organizationId: string,
     params?: GetLogHistogramParams,) => {
     return [
-    `/api/v1/organizations/${organizationId}/logs/histogram`, ...(params ? [params] : [])
+    `http://localhost:8080/api/v1/organizations/${organizationId}/logs/histogram`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -275,7 +275,7 @@ export const getGetLogServicesUrl = (organizationId: string,) => {
 
   
 
-  return `/api/v1/organizations/${organizationId}/logs/services`
+  return `http://localhost:8080/api/v1/organizations/${organizationId}/logs/services`
 }
 
 export const getLogServices = async (organizationId: string, options?: RequestInit): Promise<getLogServicesResponse> => {
@@ -302,7 +302,7 @@ export const getLogServices = async (organizationId: string, options?: RequestIn
 
 export const getGetLogServicesQueryKey = (organizationId: string,) => {
     return [
-    `/api/v1/organizations/${organizationId}/logs/services`
+    `http://localhost:8080/api/v1/organizations/${organizationId}/logs/services`
     ] as const;
     }
 

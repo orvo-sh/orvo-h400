@@ -19,6 +19,7 @@ type Service interface {
 	GetSession(ctx context.Context, token string) (*models.Session, apperr.Error)
 	GetSessionData(ctx context.Context, token string) (*models.Session, *models.User, *GetSessionDataOutput_Organization, apperr.Error)
 	SetActiveOrganization(ctx context.Context, input SetActiveOrganizationInput) apperr.Error
+	EnsureOrganizationMember(ctx context.Context, userID string, organizationID string) apperr.Error
 
 	CreateApiKey(ctx context.Context, input CreateApiKeyInput) (*models.ApiKey, *string, apperr.Error)
 	ListApiKeys(ctx context.Context, organizationID string) ([]models.ApiKey, apperr.Error)

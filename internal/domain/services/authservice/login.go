@@ -54,11 +54,21 @@ func (s *service) Login(ctx context.Context, input LoginInput) (*models.Session,
 		return nil, errs.ErrInvalidCredentials
 	}
 
+	var activeOrganizationID *string
+	memberships, err := s.postgres.Queries.GetUserOrganizationMemberships(ctx, user.ID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Login: failed to fetch organization memberships", slog.Any("error", err))
+		return nil, errs.ErrInternal
+	}
+	if len(memberships) > 0 {
+		activeOrganizationID = &memberships[0].OrganizationID
+	}
+
 	dbSession, err := s.postgres.Queries.CreateSession(ctx, db.CreateSessionParams{
 		ID:                   util.GenerateID("ses"),
 		Token:                util.GenerateRandomString(),
 		UserID:               user.ID,
-		ActiveOrganizationID: pgutil.NullText(),
+		ActiveOrganizationID: pgutil.Text(activeOrganizationID),
 		IpAddress:            pgutil.Text(input.IpAddress),
 		UserAgent:            pgutil.Text(input.UserAgent),
 		ExpiresAt:            pgutil.Timestamptz(time.Now().Add(s.config.SessionExpiresIn)),

@@ -16,43 +16,42 @@ func intervalFromRange(start, end time.Time) string {
 	d := end.Sub(start)
 	switch {
 	case d <= 30*time.Minute:
-		return "1 MINUTE"
+		return "1m"
 	case d <= 2*time.Hour:
-		return "5 MINUTE"
+		return "5m"
 	case d <= 12*time.Hour:
-		return "15 MINUTE"
+		return "15m"
 	case d <= 48*time.Hour:
-		return "1 HOUR"
+		return "1h"
 	case d <= 7*24*time.Hour:
-		return "6 HOUR"
+		return "6h"
 	case d <= 30*24*time.Hour:
-		return "1 DAY"
+		return "1d"
 	default:
-		return "1 DAY"
+		return "1d"
 	}
 }
 
-// parseInterval converts user-provided shorthand intervals to ClickHouse interval strings.
-func parseInterval(s string) string {
-	switch s {
+func parseIntervalSeconds(interval string) int {
+	switch interval {
 	case "1m":
-		return "1 MINUTE"
+		return 60
 	case "5m":
-		return "5 MINUTE"
+		return 300
 	case "15m":
-		return "15 MINUTE"
+		return 900
 	case "30m":
-		return "30 MINUTE"
+		return 1800
 	case "1h":
-		return "1 HOUR"
+		return 3600
 	case "6h":
-		return "6 HOUR"
+		return 21600
 	case "12h":
-		return "12 HOUR"
+		return 43200
 	case "1d":
-		return "1 DAY"
+		return 86400
 	default:
-		return s
+		return 3600
 	}
 }
 
@@ -62,63 +61,51 @@ func (s *service) GetHistogram(ctx context.Context, input GetHistogramInput) (*G
 	interval := input.Interval
 	if interval == "" {
 		interval = intervalFromRange(input.StartTime, input.EndTime)
-	} else {
-		interval = parseInterval(interval)
 	}
+	stepSeconds := parseIntervalSeconds(interval)
 
-	var (
-		clauses []string
-		args    []any
+	args := &sqlArgBuilder{}
+	hotWhere := s.buildHistogramWhere(ctx, "l", input, args)
+	restoredWhere := s.buildHistogramWhere(ctx, "r", input, args)
+
+	query := fmt.Sprintf(`WITH unioned AS (
+		SELECT
+			l.id,
+			l.organization_id,
+			l.timestamp,
+			l.severity_number
+		FROM logs_hot l
+		WHERE %s
+
+		UNION ALL
+
+		SELECT
+			r.id,
+			r.organization_id,
+			r.timestamp,
+			r.severity_number
+		FROM logs_restored r
+		WHERE %s
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM logs_hot h
+			WHERE h.organization_id = r.organization_id
+			  AND h.id = r.id
+		  )
 	)
-
-	clauses = append(clauses, "organization_id = ?")
-	args = append(args, input.OrganizationID)
-
-	if !input.StartTime.IsZero() {
-		clauses = append(clauses, "timestamp >= ?")
-		args = append(args, input.StartTime)
-	}
-	if !input.EndTime.IsZero() {
-		clauses = append(clauses, "timestamp <= ?")
-		args = append(args, input.EndTime)
-	}
-
-	if input.SearchQuery != "" {
-		clauses = append(clauses, "body ILIKE ?")
-		args = append(args, "%"+input.SearchQuery+"%")
-	}
-
-	for _, f := range input.Filters {
-		col, ok := resolveField(f.Field)
-		if !ok {
-			continue
-		}
-		clause, filterArgs, err := buildFilterClause(col, f)
-		if err != nil {
-			continue
-		}
-		clauses = append(clauses, clause)
-		args = append(args, filterArgs...)
-	}
-
-	where := strings.Join(clauses, " AND ")
-
-	// Severity ranges per OTLP spec:
-	// TRACE=1-4, DEBUG=5-8, INFO=9-12, WARN=13-16, ERROR=17-20, FATAL=21-24
-	query := fmt.Sprintf(`SELECT
-		toStartOfInterval(timestamp, INTERVAL %s) AS bucket,
-		count() AS total,
-		countIf(severity_number >= 5 AND severity_number <= 8) AS debug,
-		countIf(severity_number >= 9 AND severity_number <= 12) AS info,
-		countIf(severity_number >= 13 AND severity_number <= 16) AS warn,
-		countIf(severity_number >= 17 AND severity_number <= 20) AS error,
-		countIf(severity_number >= 21 AND severity_number <= 24) AS fatal
-	FROM logs
-	WHERE %s
+	SELECT
+		to_timestamp(floor(extract(epoch FROM unioned.timestamp) / %d) * %d) AS bucket,
+		count(*) AS total,
+		count(*) FILTER (WHERE severity_number >= 5 AND severity_number <= 8) AS debug,
+		count(*) FILTER (WHERE severity_number >= 9 AND severity_number <= 12) AS info,
+		count(*) FILTER (WHERE severity_number >= 13 AND severity_number <= 16) AS warn,
+		count(*) FILTER (WHERE severity_number >= 17 AND severity_number <= 20) AS error,
+		count(*) FILTER (WHERE severity_number >= 21 AND severity_number <= 24) AS fatal
+	FROM unioned
 	GROUP BY bucket
-	ORDER BY bucket ASC`, interval, where)
+	ORDER BY bucket ASC`, hotWhere, restoredWhere, stepSeconds, stepSeconds)
 
-	rows, err := s.ch.Query(ctx, query, args...)
+	rows, err := s.pg.Pool().Query(ctx, query, args.args...)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "GetHistogram: query failed", slog.Any("error", err))
 		return nil, errs.ErrInternal
@@ -148,4 +135,41 @@ func (s *service) GetHistogram(ctx context.Context, input GetHistogramInput) (*G
 	}
 
 	return &GetHistogramOutput{Buckets: buckets}, nil
+}
+
+func (s *service) buildHistogramWhere(ctx context.Context, alias string, input GetHistogramInput, args *sqlArgBuilder) string {
+	prefix := alias + "."
+	clauses := []string{
+		fmt.Sprintf("%sorganization_id = %s", prefix, args.add(input.OrganizationID)),
+	}
+
+	if !input.StartTime.IsZero() {
+		clauses = append(clauses, fmt.Sprintf("%stimestamp >= %s", prefix, args.add(input.StartTime)))
+	}
+	if !input.EndTime.IsZero() {
+		clauses = append(clauses, fmt.Sprintf("%stimestamp <= %s", prefix, args.add(input.EndTime)))
+	}
+	if input.SearchQuery != "" {
+		clauses = append(clauses, fmt.Sprintf("%sbody ILIKE %s", prefix, args.add("%"+input.SearchQuery+"%")))
+	}
+
+	for _, f := range input.Filters {
+		col, ok := resolveField(alias, f.Field)
+		if !ok {
+			s.logger.WarnContext(ctx, "GetHistogram: unknown filter field, skipping", slog.String("field", f.Field))
+			continue
+		}
+		clause, err := buildFilterClause(col, f, args)
+		if err != nil {
+			s.logger.WarnContext(ctx, "GetHistogram: invalid filter, skipping",
+				slog.String("field", f.Field),
+				slog.String("operator", string(f.Operator)),
+				slog.Any("error", err),
+			)
+			continue
+		}
+		clauses = append(clauses, clause)
+	}
+
+	return strings.Join(clauses, " AND ")
 }

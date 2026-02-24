@@ -11,6 +11,7 @@ import (
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/logservice"
 	"github.com/orvo-sh/orvo/internal/http/dto"
+	"github.com/orvo-sh/orvo/internal/http/helpers"
 	"github.com/orvo-sh/orvo/internal/http/middleware/authmiddleware"
 )
 
@@ -99,7 +100,7 @@ func (h *LogHandler) queryLogs(ctx context.Context, input *dto.QueryLogsInput) (
 
 	result, err := h.logService.QueryLogs(ctx, svcInput)
 	if err != nil {
-		return nil, err
+		return nil, helpers.ToHTTPError(err)
 	}
 
 	return &dto.QueryLogsOutput{
@@ -152,7 +153,7 @@ func (h *LogHandler) getHistogram(ctx context.Context, input *dto.GetHistogramIn
 
 	result, err := h.logService.GetHistogram(ctx, svcInput)
 	if err != nil {
-		return nil, err
+		return nil, helpers.ToHTTPError(err)
 	}
 
 	buckets := make([]dto.HistogramBucket, len(result.Buckets))
@@ -180,7 +181,7 @@ func (h *LogHandler) getHistogram(ctx context.Context, input *dto.GetHistogramIn
 func (h *LogHandler) getServices(ctx context.Context, input *dto.GetServicesInput) (*dto.GetServicesOutput, error) {
 	services, err := h.logService.GetServices(ctx, input.OrganizationID)
 	if err != nil {
-		return nil, err
+		return nil, helpers.ToHTTPError(err)
 	}
 
 	return &dto.GetServicesOutput{

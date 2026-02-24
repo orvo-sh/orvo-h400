@@ -6,19 +6,21 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/orvo-sh/orvo/internal/domain/models"
-	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
+	"github.com/orvo-sh/orvo/internal/infra/postgres"
 	"github.com/orvo-sh/orvo/pkg/batcher"
+	"github.com/orvo-sh/orvo/pkg/util"
 )
 
 type MetricSink struct {
-	clickhouse *clickhouse.DB
-	batcher    *batcher.Batcher[models.MetricPoint]
+	postgres *postgres.DB
+	batcher  *batcher.Batcher[models.MetricPoint]
 }
 
-func NewMetricSink(clickhouse *clickhouse.DB, logger *slog.Logger) *MetricSink {
+func NewMetricSink(postgres *postgres.DB, logger *slog.Logger) *MetricSink {
 	s := &MetricSink{
-		clickhouse: clickhouse,
+		postgres: postgres,
 	}
 	s.batcher = batcher.New(
 		logger.With("module", "MetricSinkBatcher"),
@@ -49,51 +51,58 @@ func (s *MetricSink) writeBatch(ctx context.Context, records []models.MetricPoin
 		return nil
 	}
 
-	batch, err := s.clickhouse.PrepareBatch(ctx, `INSERT INTO metrics (
+	const query = `INSERT INTO metrics_hot (
+		id,
 		organization_id,
-		metric_name, metric_type, metric_unit, metric_description,
-		service_name, deployment_environment,
+		metric_name,
+		metric_type,
+		metric_unit,
+		metric_description,
+		service_name,
+		deployment_environment,
 		resource_attributes,
-		scope_name, scope_version,
+		scope_name,
+		scope_version,
 		attributes,
-		start_time, time,
-		value_int, value_double,
-		aggregation_temporality, is_monotonic,
-		histogram_count, histogram_sum, histogram_min, histogram_max,
-		histogram_bucket_counts, histogram_explicit_bounds,
-		exemplar_trace_ids, exemplar_span_ids, exemplar_values, exemplar_timestamps,
+		start_time,
+		time,
+		value_int,
+		value_double,
+		aggregation_temporality,
+		is_monotonic,
+		histogram_count,
+		histogram_sum,
+		histogram_min,
+		histogram_max,
+		histogram_bucket_counts,
+		histogram_explicit_bounds,
+		exemplars,
 		flags
-	)`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare metric batch: %w", err)
-	}
+	) VALUES (
+		$1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25::jsonb,$26
+	)`
+
+	var dbBatch pgx.Batch
 
 	for _, r := range records {
-		// Convert exemplars to parallel arrays.
-		exemplarTraceIDs := make([]string, len(r.Exemplars))
-		exemplarSpanIDs := make([]string, len(r.Exemplars))
-		exemplarValues := make([]float64, len(r.Exemplars))
-		exemplarTimestamps := make([]time.Time, len(r.Exemplars))
-		for i, e := range r.Exemplars {
-			exemplarTraceIDs[i] = e.TraceID
-			exemplarSpanIDs[i] = e.SpanID
-			exemplarValues[i] = e.Value
-			exemplarTimestamps[i] = e.Timestamp
+		metricID := r.ID
+		if metricID == "" {
+			metricID = util.GenerateID("met")
 		}
 
-		// Ensure resource attributes is not nil.
-		resourceAttrs := r.ResourceAttrs
-		if resourceAttrs == nil {
-			resourceAttrs = map[string]string{}
+		resourceAttrs, err := jsonObject(r.ResourceAttrs)
+		if err != nil {
+			return fmt.Errorf("marshal resource attributes: %w", err)
+		}
+		attrs, err := jsonObject(r.Attributes)
+		if err != nil {
+			return fmt.Errorf("marshal metric attributes: %w", err)
+		}
+		exemplars, err := jsonArray(r.Exemplars)
+		if err != nil {
+			return fmt.Errorf("marshal metric exemplars: %w", err)
 		}
 
-		// Ensure attributes is not nil.
-		attrs := r.Attributes
-		if attrs == nil {
-			attrs = map[string]string{}
-		}
-
-		// Ensure histogram arrays are not nil (ClickHouse needs non-nil arrays).
 		bucketCounts := r.HistogramBucketCounts
 		if bucketCounts == nil {
 			bucketCounts = []uint64{}
@@ -103,7 +112,9 @@ func (s *MetricSink) writeBatch(ctx context.Context, records []models.MetricPoin
 			explicitBounds = []float64{}
 		}
 
-		if err := batch.Append(
+		dbBatch.Queue(
+			query,
+			metricID,
 			r.OrganizationID,
 			r.MetricName, r.MetricType, r.MetricUnit, r.Description,
 			r.ServiceName, r.DeploymentEnv,
@@ -115,15 +126,20 @@ func (s *MetricSink) writeBatch(ctx context.Context, records []models.MetricPoin
 			r.AggregationTemporality, r.IsMonotonic,
 			r.HistogramCount, r.HistogramSum, r.HistogramMin, r.HistogramMax,
 			bucketCounts, explicitBounds,
-			exemplarTraceIDs, exemplarSpanIDs, exemplarValues, exemplarTimestamps,
+			exemplars,
 			r.Flags,
-		); err != nil {
-			return fmt.Errorf("failed to append metric to batch: %w", err)
-		}
+		)
 	}
 
-	if err := batch.Send(); err != nil {
-		return fmt.Errorf("failed to send metric batch: %w", err)
+	results := s.postgres.Pool().SendBatch(ctx, &dbBatch)
+	for range records {
+		if _, err := results.Exec(); err != nil {
+			_ = results.Close()
+			return fmt.Errorf("insert metrics_hot batch: %w", err)
+		}
+	}
+	if err := results.Close(); err != nil {
+		return fmt.Errorf("close metrics_hot batch: %w", err)
 	}
 
 	return nil

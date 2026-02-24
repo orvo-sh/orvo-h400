@@ -56,6 +56,7 @@ type MetricExemplar struct {
 // For Sum/Gauge, ValueInt or ValueDouble is set.
 // For Histogram, the Histogram* fields are set.
 type MetricPoint struct {
+	ID             string            `json:"id"`
 	OrganizationID string            `json:"organization_id"`
 	MetricName     string            `json:"metric_name"`
 	MetricType     MetricType        `json:"metric_type"`

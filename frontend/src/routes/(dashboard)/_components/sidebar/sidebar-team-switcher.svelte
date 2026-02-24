@@ -25,16 +25,28 @@
 
 	// List Organizations
 	const orgsQuery = createListOrganizations();
-	const organizations = $derived(orgsQuery.data?.data?.organizations ?? []);
+	const organizations = $derived.by(() => {
+		const res = orgsQuery.data;
+		if (res?.status === 200) {
+			return res.data.organizations ?? [];
+		}
+		return [];
+	});
 
 	// Mutations
 	const setActiveMutation = createSetActiveOrganization();
 	const createOrgMutation = createCreateOrganization();
+	let setActiveError = $state('');
+	let createOrgError = $state('');
 
 	function handleSetActive(orgId: string) {
+		setActiveError = '';
 		setActiveMutation.mutate({ data: { organization_id: orgId } }, {
 			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
+			},
+			onError: () => {
+				setActiveError = 'Failed to switch organization';
 			}
 		});
 	}
@@ -45,17 +57,25 @@
 
 	function handleCreateOrg() {
 		if (!newOrgName.trim()) return;
+		createOrgError = '';
 		createOrgMutation.mutate({
 				data: { 
 					name: newOrgName.trim(), 
 					set_as_active_organization: true 
 				} 
 		}, {
-			onSuccess: () => {
+			onSuccess: (res) => {
+				if (res.status !== 200) {
+					createOrgError = (res.data as any)?.detail ?? 'Failed to create organization';
+					return;
+				}
 				dialogOpen = false;
 				newOrgName = '';
 				queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey() });
 				orgsQuery.refetch(); 
+			},
+			onError: () => {
+				createOrgError = 'Failed to create organization';
 			}
 		});
 	}
@@ -63,6 +83,7 @@
 	function closeDialog() {
 		dialogOpen = false;
 		newOrgName = '';
+		createOrgError = '';
 	}
 </script>
 
@@ -125,6 +146,9 @@
     </DropdownMenu.Root>
   </Sidebar.MenuItem>
 </Sidebar.Menu>
+{#if setActiveError}
+	<div class="text-destructive px-2 pt-1 text-xs">{setActiveError}</div>
+{/if}
 
 <Dialog.Root bind:open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
     <Dialog.Content class="sm:max-w-md">
@@ -139,6 +163,11 @@
                 <label for="org-name" class="text-sm font-medium">Organization Name</label>
                 <Input id="org-name" bind:value={newOrgName} placeholder="Acme Inc." />
             </div>
+			{#if createOrgError}
+				<div class="text-destructive bg-destructive/10 rounded-md px-3 py-2 text-sm">
+					{createOrgError}
+				</div>
+			{/if}
         </div>
         <Dialog.Footer>
             <Button variant="outline" onclick={closeDialog}>Cancel</Button>

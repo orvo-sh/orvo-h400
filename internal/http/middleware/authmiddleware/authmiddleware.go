@@ -65,6 +65,13 @@ func New(api huma.API, authService authservice.Service) func(huma.Context, func(
 			return
 		}
 
+		if orgID := strings.TrimSpace(ctx.Param("organization_id")); orgID != "" {
+			if err := authService.EnsureOrganizationMember(ctx.Context(), session.UserID, orgID); err != nil {
+				helpers.ErrResp(ctx, api, err)
+				return
+			}
+		}
+
 		ctx = huma.WithValue(ctx, SessionContextKey, session)
 		next(ctx)
 	}

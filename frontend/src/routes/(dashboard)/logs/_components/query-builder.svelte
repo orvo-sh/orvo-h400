@@ -140,11 +140,11 @@
 
 					<!-- Field selector -->
 					<div class="space-y-1">
-						<label class="text-xs text-muted-foreground">Field</label>
+						<label class="text-xs text-muted-foreground" for="log-filter-field">Field</label>
 						<DropdownMenu.Root>
 							<DropdownMenu.Trigger class="w-full">
 								{#snippet child({ props })}
-									<Button variant="outline" class="w-full justify-start" size="sm" {...props}>
+									<Button id="log-filter-field" variant="outline" class="w-full justify-start" size="sm" {...props}>
 										{newFilterField || 'Select field...'}
 									</Button>
 								{/snippet}
@@ -162,11 +162,12 @@
 
 					<!-- Operator selector -->
 					<div class="space-y-1">
-						<label class="text-xs text-muted-foreground">Operator</label>
+						<label class="text-xs text-muted-foreground" for="log-filter-operator">Operator</label>
 						<DropdownMenu.Root>
 							<DropdownMenu.Trigger class="w-full">
 								{#snippet child({ props })}
 									<Button
+										id="log-filter-operator"
 										variant="outline"
 										class="w-full justify-start font-mono"
 										size="sm"
@@ -192,8 +193,9 @@
 
 					<!-- Value input -->
 					<div class="space-y-1">
-						<label class="text-xs text-muted-foreground">Value</label>
+						<label class="text-xs text-muted-foreground" for="log-filter-value">Value</label>
 						<Input
+							id="log-filter-value"
 							bind:value={newFilterValue}
 							placeholder="Enter value..."
 							class="h-8"

@@ -4,7 +4,7 @@
 		requestId
 	}: {
 		message: string;
-		requestId: Nullable<string>;
+		requestId: string | null;
 	} = $props();
 </script>
 

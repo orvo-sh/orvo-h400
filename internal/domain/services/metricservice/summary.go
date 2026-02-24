@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,138 +27,102 @@ func (s *service) GetMetricSummary(ctx context.Context, input GetMetricSummaryIn
 	if lookback == 0 {
 		lookback = 5 * time.Minute
 	}
-
 	since := time.Now().Add(-lookback)
 
-	var aggExpr string
-	switch input.Aggregation {
-	case "sum":
-		return s.summaryFromRollup(ctx, input, since, "sum(sum_value)")
-	case "min":
-		return s.summaryFromRollup(ctx, input, since, "min(min_value)")
-	case "max":
-		return s.summaryFromRollup(ctx, input, since, "max(max_value)")
-	case "avg":
-		return s.summaryFromRollup(ctx, input, since, "avgMerge(avg_value)")
-	case "count":
-		return s.summaryFromRollup(ctx, input, since, "sum(point_count)")
-	case "last":
-		return s.summaryFromRollup(ctx, input, since, "argMaxMerge(last_value)")
-	case "p50", "p90", "p95", "p99":
-		quantile := percentileQuantile(input.Aggregation)
-		aggExpr = fmt.Sprintf("quantile(%s)(coalesce(value_double, CAST(value_int AS Float64), 0))", quantile)
-		return s.summaryFromRaw(ctx, input, since, aggExpr)
-	default:
-		return s.summaryFromRollup(ctx, input, since, "avgMerge(avg_value)")
-	}
-}
+	aggExpr := summaryAggExpr(input.Aggregation)
 
-func (s *service) summaryFromRollup(ctx context.Context, input GetMetricSummaryInput, since time.Time, aggExpr string) (*GetMetricSummaryOutput, apperr.Error) {
-	var (
-		clauses []string
-		args    []any
+	args := &metricSQLBuilder{}
+	hotWhere := buildSummaryWhere("m", input, since, args)
+	restoredWhere := buildSummaryWhere("r", input, since, args)
+
+	query := fmt.Sprintf(`WITH unioned AS (
+		SELECT
+			m.id,
+			m.organization_id,
+			m.metric_name,
+			m.service_name,
+			m.time,
+			m.attributes,
+			coalesce(m.value_double, m.value_int::double precision, 0) AS metric_value
+		FROM metrics_hot m
+		WHERE %s
+
+		UNION ALL
+
+		SELECT
+			r.id,
+			r.organization_id,
+			r.metric_name,
+			r.service_name,
+			r.time,
+			r.attributes,
+			coalesce(r.value_double, r.value_int::double precision, 0) AS metric_value
+		FROM metrics_restored r
+		WHERE %s
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM metrics_hot h
+			WHERE h.organization_id = r.organization_id
+			  AND h.id = r.id
+		  )
 	)
-
-	clauses = append(clauses, "organization_id = ?")
-	args = append(args, input.OrganizationID)
-
-	clauses = append(clauses, "metric_name = ?")
-	args = append(args, input.MetricName)
-
-	clauses = append(clauses, "time_bucket >= ?")
-	args = append(args, since)
-
-	if input.ServiceName != "" {
-		clauses = append(clauses, "service_name = ?")
-		args = append(args, input.ServiceName)
-	}
-
-	for k, v := range input.Filters {
-		clauses = append(clauses, fmt.Sprintf("attributes['%s'] = ?", k))
-		args = append(args, v)
-	}
-
-	where := strings.Join(clauses, " AND ")
-
-	query := fmt.Sprintf(`SELECT
-		%s AS value,
-		max(time_bucket) AS latest
-	FROM metrics_1m
-	WHERE %s`, aggExpr, where)
-
-	rows, err := s.ch.Query(ctx, query, args...)
-	if err != nil {
-		s.logger.ErrorContext(ctx, "GetMetricSummary(rollup): query failed", slog.Any("error", err))
-		return nil, errs.ErrInternal
-	}
-	defer rows.Close()
-
-	result := &GetMetricSummaryOutput{}
-	if rows.Next() {
-		if err := rows.Scan(&result.Value, &result.Timestamp); err != nil {
-			s.logger.ErrorContext(ctx, "GetMetricSummary(rollup): scan failed", slog.Any("error", err))
-			return nil, errs.ErrInternal
-		}
-	}
-	if err := rows.Err(); err != nil {
-		s.logger.ErrorContext(ctx, "GetMetricSummary(rollup): rows iteration error", slog.Any("error", err))
-		return nil, errs.ErrInternal
-	}
-
-	return result, nil
-}
-
-func (s *service) summaryFromRaw(ctx context.Context, input GetMetricSummaryInput, since time.Time, aggExpr string) (*GetMetricSummaryOutput, apperr.Error) {
-	var (
-		clauses []string
-		args    []any
-	)
-
-	clauses = append(clauses, "organization_id = ?")
-	args = append(args, input.OrganizationID)
-
-	clauses = append(clauses, "metric_name = ?")
-	args = append(args, input.MetricName)
-
-	clauses = append(clauses, "time >= ?")
-	args = append(args, since)
-
-	if input.ServiceName != "" {
-		clauses = append(clauses, "service_name = ?")
-		args = append(args, input.ServiceName)
-	}
-
-	for k, v := range input.Filters {
-		clauses = append(clauses, fmt.Sprintf("attributes['%s'] = ?", k))
-		args = append(args, v)
-	}
-
-	where := strings.Join(clauses, " AND ")
-
-	query := fmt.Sprintf(`SELECT
+	SELECT
 		%s AS value,
 		max(time) AS latest
-	FROM metrics
-	WHERE %s`, aggExpr, where)
+	FROM unioned`, hotWhere, restoredWhere, aggExpr)
 
-	rows, err := s.ch.Query(ctx, query, args...)
-	if err != nil {
-		s.logger.ErrorContext(ctx, "GetMetricSummary(raw): query failed", slog.Any("error", err))
-		return nil, errs.ErrInternal
-	}
-	defer rows.Close()
+	row := s.pg.Pool().QueryRow(ctx, query, args.args...)
 
-	result := &GetMetricSummaryOutput{}
-	if rows.Next() {
-		if err := rows.Scan(&result.Value, &result.Timestamp); err != nil {
-			s.logger.ErrorContext(ctx, "GetMetricSummary(raw): scan failed", slog.Any("error", err))
-			return nil, errs.ErrInternal
-		}
-	}
-	if err := rows.Err(); err != nil {
-		s.logger.ErrorContext(ctx, "GetMetricSummary(raw): rows iteration error", slog.Any("error", err))
+	var result GetMetricSummaryOutput
+	if err := row.Scan(&result.Value, &result.Timestamp); err != nil {
+		s.logger.ErrorContext(ctx, "GetMetricSummary: query failed", slog.Any("error", err))
 		return nil, errs.ErrInternal
 	}
 
-	return result, nil
+	return &result, nil
+}
+
+func buildSummaryWhere(alias string, input GetMetricSummaryInput, since time.Time, args *metricSQLBuilder) string {
+	prefix := alias + "."
+	clauses := []string{
+		fmt.Sprintf("%sorganization_id = %s", prefix, args.add(input.OrganizationID)),
+		fmt.Sprintf("%smetric_name = %s", prefix, args.add(input.MetricName)),
+		fmt.Sprintf("%stime >= %s", prefix, args.add(since)),
+	}
+
+	if input.ServiceName != "" {
+		clauses = append(clauses, fmt.Sprintf("%sservice_name = %s", prefix, args.add(input.ServiceName)))
+	}
+
+	filterKeys := make([]string, 0, len(input.Filters))
+	for key := range input.Filters {
+		filterKeys = append(filterKeys, key)
+	}
+	sort.Strings(filterKeys)
+	for _, key := range filterKeys {
+		clauses = append(clauses, fmt.Sprintf("%sattributes->>'%s' = %s", prefix, key, args.add(input.Filters[key])))
+	}
+
+	return strings.Join(clauses, " AND ")
+}
+
+func summaryAggExpr(aggregation string) string {
+	switch aggregation {
+	case "sum":
+		return "sum(metric_value)"
+	case "min":
+		return "min(metric_value)"
+	case "max":
+		return "max(metric_value)"
+	case "avg":
+		return "avg(metric_value)"
+	case "count":
+		return "count(*)::double precision"
+	case "last":
+		return "(array_agg(metric_value ORDER BY time DESC))[1]"
+	case "p50", "p90", "p95", "p99":
+		return fmt.Sprintf("percentile_cont(%s) WITHIN GROUP (ORDER BY metric_value)", percentileQuantile(aggregation))
+	default:
+		return "avg(metric_value)"
+	}
 }

@@ -6,19 +6,20 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/orvo-sh/orvo/internal/domain/models"
-	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
+	"github.com/orvo-sh/orvo/internal/infra/postgres"
 	"github.com/orvo-sh/orvo/pkg/batcher"
 )
 
 type SpanSink struct {
-	clickhouse *clickhouse.DB
-	batcher    *batcher.Batcher[models.Span]
+	postgres *postgres.DB
+	batcher  *batcher.Batcher[models.Span]
 }
 
-func NewSpanSink(clickhouse *clickhouse.DB, logger *slog.Logger) *SpanSink {
+func NewSpanSink(postgres *postgres.DB, logger *slog.Logger) *SpanSink {
 	s := &SpanSink{
-		clickhouse: clickhouse,
+		postgres: postgres,
 	}
 	s.batcher = batcher.New(
 		logger.With("module", "SpanSinkBatcher"),
@@ -49,71 +50,98 @@ func (s *SpanSink) writeBatch(ctx context.Context, records []models.Span) error 
 		return nil
 	}
 
-	batch, err := s.clickhouse.PrepareBatch(ctx, `INSERT INTO spans (
+	const query = `INSERT INTO traces_hot (
 		id,
 		organization_id,
-		trace_id, span_id, parent_span_id, trace_state,
-		name, kind,
-		start_time, end_time, duration_ns,
-		status_code, status_message,
-		resource_attributes, scope_attributes, span_attributes,
-		resource_schema_url, scope_name, scope_version, scope_schema_url,
-		events_name, events_timestamp, events_attributes,
-		links_trace_id, links_span_id, links_trace_state, links_attributes,
-		service_name, deployment_environment
-	)`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare batch: %w", err)
-	}
+		trace_id,
+		span_id,
+		parent_span_id,
+		trace_state,
+		name,
+		kind,
+		start_time,
+		end_time,
+		duration_ns,
+		status_code,
+		status_message,
+		resource_attributes,
+		scope_attributes,
+		span_attributes,
+		resource_schema_url,
+		scope_name,
+		scope_version,
+		scope_schema_url,
+		events,
+		links,
+		service_name,
+		deployment_environment
+	) VALUES (
+		$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
+		$14::jsonb,$15::jsonb,$16::jsonb,$17,$18,$19,$20,$21::jsonb,$22::jsonb,$23,$24
+	)`
+
+	var dbBatch pgx.Batch
 
 	for _, r := range records {
-		// Convert events to parallel arrays.
-		eventsName := make([]string, len(r.Events))
-		eventsTimestamp := make([]time.Time, len(r.Events))
-		eventsAttributes := make([]map[string]string, len(r.Events))
-		for i, e := range r.Events {
-			eventsName[i] = e.Name
-			eventsTimestamp[i] = e.Timestamp
-			eventsAttributes[i] = e.Attributes
-			if eventsAttributes[i] == nil {
-				eventsAttributes[i] = map[string]string{}
-			}
+		resourceAttrs, err := jsonObject(r.ResourceAttributes)
+		if err != nil {
+			return fmt.Errorf("marshal resource attributes: %w", err)
+		}
+		scopeAttrs, err := jsonObject(r.ScopeAttributes)
+		if err != nil {
+			return fmt.Errorf("marshal scope attributes: %w", err)
+		}
+		spanAttrs, err := jsonObject(r.SpanAttributes)
+		if err != nil {
+			return fmt.Errorf("marshal span attributes: %w", err)
+		}
+		events, err := jsonArray(r.Events)
+		if err != nil {
+			return fmt.Errorf("marshal span events: %w", err)
+		}
+		links, err := jsonArray(r.Links)
+		if err != nil {
+			return fmt.Errorf("marshal span links: %w", err)
 		}
 
-		// Convert links to parallel arrays.
-		linksTraceID := make([]string, len(r.Links))
-		linksSpanID := make([]string, len(r.Links))
-		linksTraceState := make([]string, len(r.Links))
-		linksAttributes := make([]map[string]string, len(r.Links))
-		for i, l := range r.Links {
-			linksTraceID[i] = l.TraceID
-			linksSpanID[i] = l.SpanID
-			linksTraceState[i] = l.TraceState
-			linksAttributes[i] = l.Attributes
-			if linksAttributes[i] == nil {
-				linksAttributes[i] = map[string]string{}
-			}
-		}
-
-		if err := batch.Append(
+		dbBatch.Queue(
+			query,
 			r.ID,
 			r.OrganizationID,
-			r.TraceID, r.SpanID, r.ParentSpanID, r.TraceState,
-			r.Name, r.Kind,
-			r.StartTime, r.EndTime, r.DurationNs,
-			r.StatusCode, r.StatusMessage,
-			r.ResourceAttributes, r.ScopeAttributes, r.SpanAttributes,
-			r.ResourceSchemaURL, r.ScopeName, r.ScopeVersion, r.ScopeSchemaURL,
-			eventsName, eventsTimestamp, eventsAttributes,
-			linksTraceID, linksSpanID, linksTraceState, linksAttributes,
-			r.ServiceName, r.DeploymentEnvironment,
-		); err != nil {
-			return fmt.Errorf("failed to append span to batch: %w", err)
-		}
+			r.TraceID,
+			r.SpanID,
+			r.ParentSpanID,
+			r.TraceState,
+			r.Name,
+			r.Kind,
+			r.StartTime,
+			r.EndTime,
+			r.DurationNs,
+			r.StatusCode,
+			r.StatusMessage,
+			resourceAttrs,
+			scopeAttrs,
+			spanAttrs,
+			r.ResourceSchemaURL,
+			r.ScopeName,
+			r.ScopeVersion,
+			r.ScopeSchemaURL,
+			events,
+			links,
+			r.ServiceName,
+			r.DeploymentEnvironment,
+		)
 	}
 
-	if err := batch.Send(); err != nil {
-		return fmt.Errorf("failed to send batch: %w", err)
+	results := s.postgres.Pool().SendBatch(ctx, &dbBatch)
+	for range records {
+		if _, err := results.Exec(); err != nil {
+			_ = results.Close()
+			return fmt.Errorf("insert traces_hot batch: %w", err)
+		}
+	}
+	if err := results.Close(); err != nil {
+		return fmt.Errorf("close traces_hot batch: %w", err)
 	}
 
 	return nil

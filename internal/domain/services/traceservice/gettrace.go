@@ -2,8 +2,8 @@ package traceservice
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
-	"time"
 
 	"github.com/orvo-sh/orvo/internal/domain/errs"
 	"github.com/orvo-sh/orvo/internal/domain/models"
@@ -16,7 +16,74 @@ func (s *service) GetTrace(ctx context.Context, orgID string, traceID string) (*
 		slog.String("trace_id", traceID),
 	)
 
-	query := `SELECT
+	query := `WITH unioned AS (
+		SELECT
+			t.id,
+			t.organization_id,
+			t.trace_id,
+			t.span_id,
+			t.parent_span_id,
+			t.trace_state,
+			t.name,
+			t.kind,
+			t.start_time,
+			t.end_time,
+			t.duration_ns,
+			t.status_code,
+			t.status_message,
+			t.resource_attributes,
+			t.scope_attributes,
+			t.span_attributes,
+			t.resource_schema_url,
+			t.scope_name,
+			t.scope_version,
+			t.scope_schema_url,
+			t.events,
+			t.links,
+			t.service_name,
+			t.deployment_environment
+		FROM traces_hot t
+		WHERE t.organization_id = $1
+		  AND t.trace_id = $2
+
+		UNION ALL
+
+		SELECT
+			r.id,
+			r.organization_id,
+			r.trace_id,
+			r.span_id,
+			r.parent_span_id,
+			r.trace_state,
+			r.name,
+			r.kind,
+			r.start_time,
+			r.end_time,
+			r.duration_ns,
+			r.status_code,
+			r.status_message,
+			r.resource_attributes,
+			r.scope_attributes,
+			r.span_attributes,
+			r.resource_schema_url,
+			r.scope_name,
+			r.scope_version,
+			r.scope_schema_url,
+			r.events,
+			r.links,
+			r.service_name,
+			r.deployment_environment
+		FROM traces_restored r
+		WHERE r.organization_id = $1
+		  AND r.trace_id = $2
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM traces_hot h
+			WHERE h.organization_id = r.organization_id
+			  AND h.id = r.id
+		  )
+	)
+	SELECT
 		id,
 		organization_id,
 		trace_id,
@@ -37,21 +104,14 @@ func (s *service) GetTrace(ctx context.Context, orgID string, traceID string) (*
 		scope_name,
 		scope_version,
 		scope_schema_url,
-		events_name,
-		events_timestamp,
-		events_attributes,
-		links_trace_id,
-		links_span_id,
-		links_trace_state,
-		links_attributes,
+		events,
+		links,
 		service_name,
 		deployment_environment
-	FROM spans
-	WHERE organization_id = ?
-	  AND trace_id = ?
+	FROM unioned
 	ORDER BY start_time ASC`
 
-	rows, err := s.ch.Query(ctx, query, orgID, traceID)
+	rows, err := s.pg.Pool().Query(ctx, query, orgID, traceID)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "GetTrace: query failed", slog.Any("error", err))
 		return nil, errs.ErrInternal
@@ -61,13 +121,11 @@ func (s *service) GetTrace(ctx context.Context, orgID string, traceID string) (*
 	var spans []models.Span
 	for rows.Next() {
 		var sp models.Span
-		var eventsName []string
-		var eventsTimestamp []time.Time
-		var eventsAttributes []map[string]string
-		var linksTraceID []string
-		var linksSpanID []string
-		var linksTraceState []string
-		var linksAttributes []map[string]string
+		var resourceAttrsRaw []byte
+		var scopeAttrsRaw []byte
+		var spanAttrsRaw []byte
+		var eventsRaw []byte
+		var linksRaw []byte
 
 		if err := rows.Scan(
 			&sp.ID,
@@ -83,20 +141,15 @@ func (s *service) GetTrace(ctx context.Context, orgID string, traceID string) (*
 			&sp.DurationNs,
 			&sp.StatusCode,
 			&sp.StatusMessage,
-			&sp.ResourceAttributes,
-			&sp.ScopeAttributes,
-			&sp.SpanAttributes,
+			&resourceAttrsRaw,
+			&scopeAttrsRaw,
+			&spanAttrsRaw,
 			&sp.ResourceSchemaURL,
 			&sp.ScopeName,
 			&sp.ScopeVersion,
 			&sp.ScopeSchemaURL,
-			&eventsName,
-			&eventsTimestamp,
-			&eventsAttributes,
-			&linksTraceID,
-			&linksSpanID,
-			&linksTraceState,
-			&linksAttributes,
+			&eventsRaw,
+			&linksRaw,
 			&sp.ServiceName,
 			&sp.DeploymentEnvironment,
 		); err != nil {
@@ -104,31 +157,25 @@ func (s *service) GetTrace(ctx context.Context, orgID string, traceID string) (*
 			return nil, errs.ErrInternal
 		}
 
-		// Reconstruct events from parallel arrays.
-		sp.Events = make([]models.SpanEvent, len(eventsName))
-		for i := range eventsName {
-			sp.Events[i] = models.SpanEvent{
-				Name:      eventsName[i],
-				Timestamp: eventsTimestamp[i],
-			}
-			if i < len(eventsAttributes) {
-				sp.Events[i].Attributes = eventsAttributes[i]
-			}
+		if err := parseJSONMap(resourceAttrsRaw, &sp.ResourceAttributes); err != nil {
+			s.logger.ErrorContext(ctx, "GetTrace: parse resource attributes failed", slog.Any("error", err))
+			return nil, errs.ErrInternal
 		}
-
-		// Reconstruct links from parallel arrays.
-		sp.Links = make([]models.SpanLink, len(linksTraceID))
-		for i := range linksTraceID {
-			sp.Links[i] = models.SpanLink{
-				TraceID: linksTraceID[i],
-				SpanID:  linksSpanID[i],
-			}
-			if i < len(linksTraceState) {
-				sp.Links[i].TraceState = linksTraceState[i]
-			}
-			if i < len(linksAttributes) {
-				sp.Links[i].Attributes = linksAttributes[i]
-			}
+		if err := parseJSONMap(scopeAttrsRaw, &sp.ScopeAttributes); err != nil {
+			s.logger.ErrorContext(ctx, "GetTrace: parse scope attributes failed", slog.Any("error", err))
+			return nil, errs.ErrInternal
+		}
+		if err := parseJSONMap(spanAttrsRaw, &sp.SpanAttributes); err != nil {
+			s.logger.ErrorContext(ctx, "GetTrace: parse span attributes failed", slog.Any("error", err))
+			return nil, errs.ErrInternal
+		}
+		if err := parseSpanEvents(eventsRaw, &sp.Events); err != nil {
+			s.logger.ErrorContext(ctx, "GetTrace: parse events failed", slog.Any("error", err))
+			return nil, errs.ErrInternal
+		}
+		if err := parseSpanLinks(linksRaw, &sp.Links); err != nil {
+			s.logger.ErrorContext(ctx, "GetTrace: parse links failed", slog.Any("error", err))
+			return nil, errs.ErrInternal
 		}
 
 		spans = append(spans, sp)
@@ -141,4 +188,52 @@ func (s *service) GetTrace(ctx context.Context, orgID string, traceID string) (*
 	return &GetTraceOutput{
 		Spans: spans,
 	}, nil
+}
+
+func parseJSONMap(raw []byte, out *map[string]string) error {
+	if len(raw) == 0 {
+		*out = map[string]string{}
+		return nil
+	}
+	var value map[string]string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if value == nil {
+		value = map[string]string{}
+	}
+	*out = value
+	return nil
+}
+
+func parseSpanEvents(raw []byte, out *[]models.SpanEvent) error {
+	if len(raw) == 0 {
+		*out = []models.SpanEvent{}
+		return nil
+	}
+	var value []models.SpanEvent
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if value == nil {
+		value = []models.SpanEvent{}
+	}
+	*out = value
+	return nil
+}
+
+func parseSpanLinks(raw []byte, out *[]models.SpanLink) error {
+	if len(raw) == 0 {
+		*out = []models.SpanLink{}
+		return nil
+	}
+	var value []models.SpanLink
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if value == nil {
+		value = []models.SpanLink{}
+	}
+	*out = value
+	return nil
 }

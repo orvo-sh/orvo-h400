@@ -1,14 +1,10 @@
 include .env
 
 PG_MIGRATIONS_DIR := internal/infra/postgres/migrations
-CH_MIGRATIONS_DIR := internal/infra/clickhouse/migrations
 
 # Development
 dev:
 	wgo run ./cmd/orvo
-
-dev-ingest:
-	wgo run ./cmd/ingest
 
 # Database migrations
 create-migration:
@@ -25,9 +21,6 @@ migrate-postgres:
 migrate-down:
 	@goose -dir $(PG_MIGRATIONS_DIR) postgres "${POSTGRES_URL}" down
 
-migrate-clickhouse:
-	@goose -dir $(CH_MIGRATIONS_DIR) clickhouse "clickhouse://${CLICKHOUSE_URL}" up
-
 gen-openapi:
 	go run ./cmd/openapi > openapi.yaml
 
@@ -43,4 +36,4 @@ generate-api:
 	cd frontend && pnpm run generate-api
 	@echo "API client generated: frontend/src/lib/api/schema.ts"
 
-.PHONY: dev dev-ingest create-migration migrate migrate-down sqlc generate-api
+.PHONY: dev create-migration migrate migrate-down sqlc generate-api

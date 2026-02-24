@@ -2,6 +2,7 @@ package logservice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -17,39 +18,56 @@ const (
 	maxLimit     = 1000
 )
 
-// fieldMapping maps user-facing filter field names to ClickHouse column expressions.
-func fieldMapping(field string) (string, bool) {
+type sqlArgBuilder struct {
+	args []any
+}
+
+func (b *sqlArgBuilder) add(v any) string {
+	b.args = append(b.args, v)
+	return fmt.Sprintf("$%d", len(b.args))
+}
+
+// fieldMapping maps user-facing filter field names to SQL column expressions.
+func fieldMapping(alias string, field string) (string, bool) {
+	prefix := ""
+	if alias != "" {
+		prefix = alias + "."
+	}
+
 	switch field {
 	case "service", "service_name":
-		return "service_name", true
+		return prefix + "service_name", true
 	case "level", "severity", "severity_text":
-		return "severity_text", true
+		return prefix + "severity_text", true
 	case "severity_number":
-		return "severity_number", true
+		return prefix + "severity_number", true
 	case "body", "message":
-		return "body", true
+		return prefix + "body", true
 	case "trace_id":
-		return "trace_id", true
+		return prefix + "trace_id", true
 	case "span_id":
-		return "span_id", true
+		return prefix + "span_id", true
 	case "environment", "deployment_environment":
-		return "deployment_environment", true
+		return prefix + "deployment_environment", true
 	default:
 		return "", false
 	}
 }
 
-// attributeExpression returns a ClickHouse map lookup expression for attribute fields.
-// Fields prefixed with "resource.", "scope.", or "log." (or "attr.") are looked up in
-// the corresponding attributes map.
-func attributeExpression(field string) (string, bool) {
+// attributeExpression returns a JSON attribute lookup expression for attribute fields.
+func attributeExpression(alias string, field string) (string, bool) {
+	prefix := ""
+	if alias != "" {
+		prefix = alias + "."
+	}
+
 	switch {
 	case strings.HasPrefix(field, "resource."):
 		key := strings.TrimPrefix(field, "resource.")
-		return fmt.Sprintf("resource_attributes['%s']", key), true
+		return fmt.Sprintf("%sresource_attributes->>'%s'", prefix, key), true
 	case strings.HasPrefix(field, "scope."):
 		key := strings.TrimPrefix(field, "scope.")
-		return fmt.Sprintf("scope_attributes['%s']", key), true
+		return fmt.Sprintf("%sscope_attributes->>'%s'", prefix, key), true
 	case strings.HasPrefix(field, "log."), strings.HasPrefix(field, "attr."):
 		key := field
 		if strings.HasPrefix(field, "log.") {
@@ -57,21 +75,25 @@ func attributeExpression(field string) (string, bool) {
 		} else {
 			key = strings.TrimPrefix(field, "attr.")
 		}
-		return fmt.Sprintf("log_attributes['%s']", key), true
+		return fmt.Sprintf("%slog_attributes->>'%s'", prefix, key), true
 	default:
 		return "", false
 	}
 }
 
-func resolveField(field string) (string, bool) {
-	if col, ok := fieldMapping(field); ok {
+func resolveField(alias string, field string) (string, bool) {
+	if col, ok := fieldMapping(alias, field); ok {
 		return col, true
 	}
-	return attributeExpression(field)
+	return attributeExpression(alias, field)
 }
 
 func (s *service) QueryLogs(ctx context.Context, input QueryLogsInput) (*QueryLogsOutput, apperr.Error) {
 	s.logger.InfoContext(ctx, "QueryLogs: querying logs", slog.Any("input", input))
+
+	if restoreErr := s.checkRestoreRequired(ctx, input); restoreErr != nil {
+		return nil, restoreErr
+	}
 
 	limit := input.Limit
 	if limit <= 0 {
@@ -81,61 +103,67 @@ func (s *service) QueryLogs(ctx context.Context, input QueryLogsInput) (*QueryLo
 		limit = maxLimit
 	}
 
-	var (
-		clauses []string
-		args    []any
+	args := &sqlArgBuilder{}
+	hotWhere := s.buildWhereClause(ctx, "l", input, args)
+	restoredWhere := s.buildWhereClause(ctx, "r", input, args)
+	limitArg := args.add(limit)
+
+	query := fmt.Sprintf(`WITH unioned AS (
+		SELECT
+			l.id,
+			l.timestamp,
+			l.observed_timestamp,
+			l.severity_number,
+			l.severity_text,
+			l.body,
+			l.trace_id,
+			l.span_id,
+			l.trace_flags,
+			l.resource_attributes,
+			l.resource_schema_url,
+			l.scope_name,
+			l.scope_version,
+			l.scope_attributes,
+			l.scope_schema_url,
+			l.log_attributes,
+			l.service_name,
+			l.deployment_environment,
+			l.organization_id
+		FROM logs_hot l
+		WHERE %s
+
+		UNION ALL
+
+		SELECT
+			r.id,
+			r.timestamp,
+			r.observed_timestamp,
+			r.severity_number,
+			r.severity_text,
+			r.body,
+			r.trace_id,
+			r.span_id,
+			r.trace_flags,
+			r.resource_attributes,
+			r.resource_schema_url,
+			r.scope_name,
+			r.scope_version,
+			r.scope_attributes,
+			r.scope_schema_url,
+			r.log_attributes,
+			r.service_name,
+			r.deployment_environment,
+			r.organization_id
+		FROM logs_restored r
+		WHERE %s
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM logs_hot h
+			WHERE h.organization_id = r.organization_id
+			  AND h.id = r.id
+		  )
 	)
-
-	// Organization scoping (always required)
-	clauses = append(clauses, "organization_id = ?")
-	args = append(args, input.OrganizationID)
-
-	// Time range
-	if !input.StartTime.IsZero() {
-		clauses = append(clauses, "timestamp >= ?")
-		args = append(args, input.StartTime)
-	}
-	if !input.EndTime.IsZero() {
-		clauses = append(clauses, "timestamp <= ?")
-		args = append(args, input.EndTime)
-	}
-
-	// Cursor-based pagination: cursor is a timestamp; fetch logs older than cursor
-	if input.Cursor != nil {
-		clauses = append(clauses, "timestamp < ?")
-		args = append(args, *input.Cursor)
-	}
-
-	// Full-text search on body
-	if input.SearchQuery != "" {
-		clauses = append(clauses, "body ILIKE ?")
-		args = append(args, "%"+input.SearchQuery+"%")
-	}
-
-	// Dynamic filters
-	for _, f := range input.Filters {
-		col, ok := resolveField(f.Field)
-		if !ok {
-			s.logger.WarnContext(ctx, "QueryLogs: unknown filter field, skipping", slog.String("field", f.Field))
-			continue
-		}
-
-		clause, filterArgs, err := buildFilterClause(col, f)
-		if err != nil {
-			s.logger.WarnContext(ctx, "QueryLogs: invalid filter, skipping",
-				slog.String("field", f.Field),
-				slog.String("operator", string(f.Operator)),
-				slog.Any("error", err),
-			)
-			continue
-		}
-		clauses = append(clauses, clause)
-		args = append(args, filterArgs...)
-	}
-
-	where := strings.Join(clauses, " AND ")
-
-	query := fmt.Sprintf(`SELECT
+	SELECT
 		id,
 		timestamp,
 		observed_timestamp,
@@ -155,14 +183,11 @@ func (s *service) QueryLogs(ctx context.Context, input QueryLogsInput) (*QueryLo
 		service_name,
 		deployment_environment,
 		organization_id
-	FROM logs
-	WHERE %s
+	FROM unioned
 	ORDER BY timestamp DESC
-	LIMIT ?`, where)
+	LIMIT %s`, hotWhere, restoredWhere, limitArg)
 
-	args = append(args, limit)
-
-	rows, err := s.ch.Query(ctx, query, args...)
+	rows, err := s.pg.Pool().Query(ctx, query, args.args...)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "QueryLogs: query failed", slog.Any("error", err))
 		return nil, errs.ErrInternal
@@ -172,6 +197,10 @@ func (s *service) QueryLogs(ctx context.Context, input QueryLogsInput) (*QueryLo
 	var logs []models.LogRecord
 	for rows.Next() {
 		var rec models.LogRecord
+		var resourceAttrsRaw []byte
+		var scopeAttrsRaw []byte
+		var logAttrsRaw []byte
+
 		if err := rows.Scan(
 			&rec.ID,
 			&rec.Timestamp,
@@ -182,13 +211,13 @@ func (s *service) QueryLogs(ctx context.Context, input QueryLogsInput) (*QueryLo
 			&rec.TraceID,
 			&rec.SpanID,
 			&rec.TraceFlags,
-			&rec.ResourceAttributes,
+			&resourceAttrsRaw,
 			&rec.ResourceSchemaURL,
 			&rec.ScopeName,
 			&rec.ScopeVersion,
-			&rec.ScopeAttributes,
+			&scopeAttrsRaw,
 			&rec.ScopeSchemaURL,
-			&rec.LogAttributes,
+			&logAttrsRaw,
 			&rec.ServiceName,
 			&rec.DeploymentEnvironment,
 			&rec.OrganizationID,
@@ -196,6 +225,20 @@ func (s *service) QueryLogs(ctx context.Context, input QueryLogsInput) (*QueryLo
 			s.logger.ErrorContext(ctx, "QueryLogs: scan failed", slog.Any("error", err))
 			return nil, errs.ErrInternal
 		}
+
+		if err := parseJSONMap(resourceAttrsRaw, &rec.ResourceAttributes); err != nil {
+			s.logger.ErrorContext(ctx, "QueryLogs: parse resource attributes failed", slog.Any("error", err))
+			return nil, errs.ErrInternal
+		}
+		if err := parseJSONMap(scopeAttrsRaw, &rec.ScopeAttributes); err != nil {
+			s.logger.ErrorContext(ctx, "QueryLogs: parse scope attributes failed", slog.Any("error", err))
+			return nil, errs.ErrInternal
+		}
+		if err := parseJSONMap(logAttrsRaw, &rec.LogAttributes); err != nil {
+			s.logger.ErrorContext(ctx, "QueryLogs: parse log attributes failed", slog.Any("error", err))
+			return nil, errs.ErrInternal
+		}
+
 		logs = append(logs, rec)
 	}
 	if err := rows.Err(); err != nil {
@@ -203,7 +246,6 @@ func (s *service) QueryLogs(ctx context.Context, input QueryLogsInput) (*QueryLo
 		return nil, errs.ErrInternal
 	}
 
-	// Determine next cursor
 	var nextCursor *time.Time
 	if len(logs) == limit {
 		last := logs[len(logs)-1].Timestamp
@@ -216,45 +258,87 @@ func (s *service) QueryLogs(ctx context.Context, input QueryLogsInput) (*QueryLo
 	}, nil
 }
 
-// buildFilterClause converts a single Filter into a SQL clause with positional args.
-func buildFilterClause(col string, f Filter) (string, []any, error) {
+func (s *service) buildWhereClause(ctx context.Context, alias string, input QueryLogsInput, args *sqlArgBuilder) string {
+	prefix := alias + "."
+	clauses := []string{
+		fmt.Sprintf("%sorganization_id = %s", prefix, args.add(input.OrganizationID)),
+	}
+
+	if !input.StartTime.IsZero() {
+		clauses = append(clauses, fmt.Sprintf("%stimestamp >= %s", prefix, args.add(input.StartTime)))
+	}
+	if !input.EndTime.IsZero() {
+		clauses = append(clauses, fmt.Sprintf("%stimestamp <= %s", prefix, args.add(input.EndTime)))
+	}
+	if input.Cursor != nil {
+		clauses = append(clauses, fmt.Sprintf("%stimestamp < %s", prefix, args.add(*input.Cursor)))
+	}
+	if input.SearchQuery != "" {
+		clauses = append(clauses, fmt.Sprintf("%sbody ILIKE %s", prefix, args.add("%"+input.SearchQuery+"%")))
+	}
+
+	for _, f := range input.Filters {
+		col, ok := resolveField(alias, f.Field)
+		if !ok {
+			s.logger.WarnContext(ctx, "QueryLogs: unknown filter field, skipping", slog.String("field", f.Field))
+			continue
+		}
+
+		clause, err := buildFilterClause(col, f, args)
+		if err != nil {
+			s.logger.WarnContext(ctx, "QueryLogs: invalid filter, skipping",
+				slog.String("field", f.Field),
+				slog.String("operator", string(f.Operator)),
+				slog.Any("error", err),
+			)
+			continue
+		}
+		clauses = append(clauses, clause)
+	}
+
+	return strings.Join(clauses, " AND ")
+}
+
+// buildFilterClause converts a single Filter into a SQL clause.
+func buildFilterClause(col string, f Filter, args *sqlArgBuilder) (string, error) {
 	switch f.Operator {
 	case FilterOperatorContains:
-		return fmt.Sprintf("%s ILIKE ?", col), []any{"%" + f.Value + "%"}, nil
+		return fmt.Sprintf("%s ILIKE %s", col, args.add("%"+f.Value+"%")), nil
 	case FilterOperatorNotContains:
-		return fmt.Sprintf("%s NOT ILIKE ?", col), []any{"%" + f.Value + "%"}, nil
+		return fmt.Sprintf("%s NOT ILIKE %s", col, args.add("%"+f.Value+"%")), nil
 	case FilterOperatorIn:
 		vals := splitValues(f.Value)
-		placeholders := make([]string, len(vals))
-		args := make([]any, len(vals))
-		for i, v := range vals {
-			placeholders[i] = "?"
-			args[i] = v
+		if len(vals) == 0 {
+			return "", fmt.Errorf("empty IN filter values")
 		}
-		return fmt.Sprintf("%s IN (%s)", col, strings.Join(placeholders, ",")), args, nil
+		placeholders := make([]string, 0, len(vals))
+		for _, v := range vals {
+			placeholders = append(placeholders, args.add(v))
+		}
+		return fmt.Sprintf("%s IN (%s)", col, strings.Join(placeholders, ",")), nil
 	case FilterOperatorNotIn:
 		vals := splitValues(f.Value)
-		placeholders := make([]string, len(vals))
-		args := make([]any, len(vals))
-		for i, v := range vals {
-			placeholders[i] = "?"
-			args[i] = v
+		if len(vals) == 0 {
+			return "", fmt.Errorf("empty NOT IN filter values")
 		}
-		return fmt.Sprintf("%s NOT IN (%s)", col, strings.Join(placeholders, ",")), args, nil
+		placeholders := make([]string, 0, len(vals))
+		for _, v := range vals {
+			placeholders = append(placeholders, args.add(v))
+		}
+		return fmt.Sprintf("%s NOT IN (%s)", col, strings.Join(placeholders, ",")), nil
 	case FilterOperatorGt:
-		return fmt.Sprintf("%s > ?", col), []any{f.Value}, nil
+		return fmt.Sprintf("%s > %s", col, args.add(f.Value)), nil
 	case FilterOperatorGte:
-		return fmt.Sprintf("%s >= ?", col), []any{f.Value}, nil
+		return fmt.Sprintf("%s >= %s", col, args.add(f.Value)), nil
 	case FilterOperatorLt:
-		return fmt.Sprintf("%s < ?", col), []any{f.Value}, nil
+		return fmt.Sprintf("%s < %s", col, args.add(f.Value)), nil
 	case FilterOperatorLte:
-		return fmt.Sprintf("%s <= ?", col), []any{f.Value}, nil
+		return fmt.Sprintf("%s <= %s", col, args.add(f.Value)), nil
 	default:
-		return "", nil, fmt.Errorf("unsupported operator: %s", f.Operator)
+		return "", fmt.Errorf("unsupported operator: %s", f.Operator)
 	}
 }
 
-// splitValues splits a comma-separated value string for IN/NIN operators.
 func splitValues(v string) []string {
 	parts := strings.Split(v, ",")
 	result := make([]string, 0, len(parts))
@@ -265,4 +349,20 @@ func splitValues(v string) []string {
 		}
 	}
 	return result
+}
+
+func parseJSONMap(raw []byte, out *map[string]string) error {
+	if len(raw) == 0 {
+		*out = map[string]string{}
+		return nil
+	}
+	var value map[string]string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if value == nil {
+		value = map[string]string{}
+	}
+	*out = value
+	return nil
 }

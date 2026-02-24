@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/orvo-sh/orvo/internal/domain/models"
-	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
+	"github.com/orvo-sh/orvo/internal/infra/postgres"
 	"github.com/orvo-sh/orvo/pkg/apperr"
 )
 
@@ -17,14 +17,29 @@ type Service interface {
 }
 
 type service struct {
-	ch     *clickhouse.DB
-	logger *slog.Logger
+	pg           *postgres.DB
+	logger       *slog.Logger
+	hotRetention time.Duration
 }
 
-func New(ch *clickhouse.DB, logger *slog.Logger) Service {
+type Config struct {
+	HotRetention time.Duration
+}
+
+func New(pg *postgres.DB, logger *slog.Logger, cfg ...Config) Service {
+	config := Config{
+		HotRetention: 7 * 24 * time.Hour,
+	}
+	if len(cfg) > 0 {
+		if cfg[0].HotRetention > 0 {
+			config.HotRetention = cfg[0].HotRetention
+		}
+	}
+
 	return &service{
-		ch:     ch,
-		logger: logger,
+		pg:           pg,
+		logger:       logger,
+		hotRetention: config.HotRetention,
 	}
 }
 

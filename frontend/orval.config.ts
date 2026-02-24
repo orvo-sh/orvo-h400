@@ -7,7 +7,7 @@ export default defineConfig({
             target: 'src/lib/api/endpoints',
             schemas: 'src/lib/api/model',
             client: 'svelte-query',
-            baseUrl: '/api/v1',
+            baseUrl: 'http://localhost:8080/api/v1',
             override: {
                 namingConvention: {
                     enum: "kebab-case",

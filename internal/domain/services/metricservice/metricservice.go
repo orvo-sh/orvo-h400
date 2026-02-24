@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/orvo-sh/orvo/internal/domain/models"
-	"github.com/orvo-sh/orvo/internal/infra/clickhouse"
+	"github.com/orvo-sh/orvo/internal/infra/postgres"
 	"github.com/orvo-sh/orvo/pkg/apperr"
 )
 
@@ -18,13 +18,13 @@ type Service interface {
 }
 
 type service struct {
-	ch     *clickhouse.DB
+	pg     *postgres.DB
 	logger *slog.Logger
 }
 
-func New(ch *clickhouse.DB, logger *slog.Logger) Service {
+func New(pg *postgres.DB, logger *slog.Logger) Service {
 	return &service{
-		ch:     ch,
+		pg:     pg,
 		logger: logger,
 	}
 }
