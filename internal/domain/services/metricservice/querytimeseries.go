@@ -29,6 +29,10 @@ func (s *service) QueryTimeseries(ctx context.Context, input QueryTimeseriesInpu
 		slog.String("aggregation", input.Aggregation),
 	)
 
+	if isDerivedMetricName(input.MetricName) {
+		return s.queryDerivedTimeseries(ctx, input)
+	}
+
 	if input.Aggregation == "" {
 		input.Aggregation = "avg"
 	}

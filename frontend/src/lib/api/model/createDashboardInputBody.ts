@@ -10,10 +10,18 @@ import type { DashboardPanel } from './dashboardPanel';
 export interface CreateDashboardInputBody {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  name: string;
+  /** Dashboard description */
   description?: string;
-  /** @nullable */
-  panels?: DashboardPanel[] | null;
-  /** @nullable */
+  /**
+   * Panel layout positions
+   * @nullable
+   */
   layout?: DashboardLayout[] | null;
+  /** Dashboard name */
+  name: string;
+  /**
+   * Dashboard panels
+   * @nullable
+   */
+  panels?: DashboardPanel[] | null;
 }

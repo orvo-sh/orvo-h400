@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,11 +18,15 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 	"github.com/orvo-sh/orvo/internal/config"
+	"github.com/orvo-sh/orvo/internal/domain/providers/githubprovider"
+	"github.com/orvo-sh/orvo/internal/domain/providers/sandboxprovider"
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/dashboardservice"
+	"github.com/orvo-sh/orvo/internal/domain/services/githubservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/logservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/metricservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/organizationservice"
+	"github.com/orvo-sh/orvo/internal/domain/services/remediationservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/traceservice"
 	"github.com/orvo-sh/orvo/internal/domain/workers"
 	"github.com/orvo-sh/orvo/internal/http/handlers"
@@ -83,6 +89,52 @@ func main() {
 	})
 	metricSvc := metricservice.New(pg, appLogger)
 	dashboardSvc := dashboardservice.New(pg, appLogger)
+	githubPrivateKey := strings.TrimSpace(cfg.GitHub.AppPrivateKey)
+	if githubPrivateKey == "" && strings.TrimSpace(cfg.GitHub.AppPrivateKeyFile) != "" {
+		keyBytes, readErr := os.ReadFile(strings.TrimSpace(cfg.GitHub.AppPrivateKeyFile))
+		if readErr != nil {
+			panic(fmt.Errorf("read github private key file: %w", readErr))
+		}
+		githubPrivateKey = string(keyBytes)
+	}
+	githubProvider, err := githubprovider.New(githubprovider.Config{
+		AppID:         cfg.GitHub.AppID,
+		AppSlug:       cfg.GitHub.AppSlug,
+		PrivateKeyPEM: githubPrivateKey,
+		WebhookSecret: cfg.GitHub.WebhookSecret,
+		APIBaseURL:    cfg.GitHub.APIBaseURL,
+		AppBaseURL:    cfg.GitHub.AppBaseURL,
+	})
+	if err != nil {
+		panic(err)
+	}
+	githubSvc := githubservice.New(pg, appLogger, githubProvider, githubservice.Config{
+		SetupRedirectURL: cfg.GitHub.SetupRedirectURL,
+		StateSecret:      cfg.GitHub.StateSecret,
+		StateTTL:         10 * time.Minute,
+	})
+	sandboxProvider := sandboxprovider.New(sandboxprovider.Config{
+		DockerBinary:        cfg.Sandbox.DockerBinary,
+		DefaultImage:        cfg.Sandbox.DefaultImage,
+		WorkingDir:          cfg.Sandbox.WorkingDir,
+		CPULimit:            cfg.Sandbox.CPULimit,
+		MemoryLimit:         cfg.Sandbox.MemoryLimit,
+		FallbackToContainer: cfg.Sandbox.FallbackToContainer,
+	})
+	if cfg.Sandbox.ImagePrepullEnabled {
+		pullTimeout := cfg.Sandbox.ImagePrepullTimeout
+		if pullTimeout <= 0 {
+			pullTimeout = 120 * time.Second
+		}
+		pullCtx, cancelPull := context.WithTimeout(rootCtx, pullTimeout)
+		if err := sandboxProvider.PrePull(pullCtx, cfg.Sandbox.DefaultImage); err != nil {
+			appLogger.Warn("failed to pre-pull sandbox image",
+				slog.String("image", cfg.Sandbox.DefaultImage),
+				slog.Any("error", err),
+			)
+		}
+		cancelPull()
+	}
 
 	partitionManager := workers.NewPartitionManager(appLogger, pg.Pool())
 	startupCtx, startupCancel := context.WithTimeout(rootCtx, 45*time.Second)
@@ -118,6 +170,30 @@ func main() {
 		RestoredTTL:          cfg.Telemetry.RestoredTTL,
 		RestoreThroughputBPS: cfg.Telemetry.RestoreThroughputBPS,
 	})
+	sandboxManager := workers.NewSandboxManager(appLogger, pg.Pool(), githubProvider, githubSvc, sandboxProvider, workers.SandboxManagerConfig{
+		DefaultImage:     cfg.Sandbox.DefaultImage,
+		WorkingDir:       cfg.Sandbox.WorkingDir,
+		CPULimit:         cfg.Sandbox.CPULimit,
+		MemoryLimit:      cfg.Sandbox.MemoryLimit,
+		JobTimeout:       cfg.Sandbox.JobTimeout,
+		CommandTimeout:   cfg.Sandbox.CommandTimeout,
+		BootstrapTimeout: cfg.Sandbox.BootstrapTimeout,
+		GitAuthorName:    cfg.Sandbox.GitAuthorName,
+		GitAuthorEmail:   cfg.Sandbox.GitAuthorEmail,
+	})
+	remediationSvc := remediationservice.New(
+		pg,
+		appLogger,
+		githubSvc,
+		traceSvc,
+		sandboxManager,
+		remediationservice.Config{
+			OpencodeCommand: cfg.Sandbox.OpencodeCommand,
+			OpencodeModel:   cfg.Sandbox.OpencodeModel,
+			OpencodeAgent:   cfg.Sandbox.OpencodeAgent,
+			OpencodeTimeout: cfg.Sandbox.OpencodeTimeout,
+		},
+	)
 
 	workerManager := workers.NewManager(appLogger, pg.Pool(), workers.ManagerConfig{
 		DefaultTimeout: 60 * time.Second,
@@ -125,9 +201,10 @@ func main() {
 	})
 
 	if cfg.App.EnableWorkers {
-		registerWorkers(workerManager, partitionManager, archiveManager, restoreManager, cfg)
+		registerWorkers(workerManager, partitionManager, archiveManager, restoreManager, sandboxManager, cfg)
 		workerManager.Start()
 		restoreManager.Notify()
+		sandboxManager.Notify()
 		defer workerManager.Stop()
 	}
 
@@ -192,6 +269,11 @@ func main() {
 			handlers.NewMetricHandler(metricSvc, authService).RegisterRoutes(api)
 			handlers.NewDashboardHandler(dashboardSvc, authService).RegisterRoutes(api)
 			handlers.NewArchiveHandler(authService, restoreManager).RegisterRoutes(api)
+			githubHandler := handlers.NewGithubHandler(authService, githubSvc)
+			githubHandler.RegisterRoutes(api)
+			githubHandler.RegisterRawRoutes(r)
+			handlers.NewSandboxHandler(authService, sandboxManager).RegisterRoutes(api)
+			handlers.NewRemediationHandler(authService, remediationSvc).RegisterRoutes(api)
 
 			r.Get("/*", func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
@@ -236,6 +318,7 @@ func registerWorkers(
 	partitionManager *workers.PartitionManager,
 	archiveManager *workers.ArchiveManager,
 	restoreManager *workers.RestoreManager,
+	sandboxManager *workers.SandboxManager,
 	cfg *config.Config,
 ) {
 	must := func(err error) {
@@ -276,4 +359,12 @@ func registerWorkers(
 	manager.RegisterChannel("restore-processor", restoreManager.TriggerChan(), func(ctx context.Context) error {
 		return restoreManager.ProcessQueued(ctx)
 	})
+
+	sandboxWorkerTimeout := cfg.Sandbox.JobTimeout + (5 * time.Minute)
+	must(manager.RegisterCron("sandbox-queue-poller", cfg.Workers.SandboxQueuePoll, func(ctx context.Context) error {
+		return sandboxManager.ProcessQueued(ctx)
+	}, sandboxWorkerTimeout))
+	manager.RegisterChannel("sandbox-processor", sandboxManager.TriggerChan(), func(ctx context.Context) error {
+		return sandboxManager.ProcessQueued(ctx)
+	}, sandboxWorkerTimeout)
 }

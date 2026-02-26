@@ -23,6 +23,7 @@ import type {
 import type {
   CreateDashboardInputBody,
   Dashboard,
+  Empty,
   ErrorModel,
   ListDashboardsOutputBody,
   UpdateDashboardInputBody
@@ -252,6 +253,97 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       > => {
       return createMutation(() => ({ ...getCreateDashboardMutationOptions(options?.()), queryClient }));
     }
+    export type deleteDashboardResponse200 = {
+  data: Empty
+  status: 200
+}
+
+export type deleteDashboardResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+    
+export type deleteDashboardResponseSuccess = (deleteDashboardResponse200) & {
+  headers: Headers;
+};
+export type deleteDashboardResponseError = (deleteDashboardResponseDefault) & {
+  headers: Headers;
+};
+
+export type deleteDashboardResponse = (deleteDashboardResponseSuccess | deleteDashboardResponseError)
+
+export const getDeleteDashboardUrl = (organizationId: string,
+    dashboardId: string,) => {
+
+
+  
+
+  return `http://localhost:8080/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
+}
+
+export const deleteDashboard = async (organizationId: string,
+    dashboardId: string, options?: RequestInit): Promise<deleteDashboardResponse> => {
+  
+  const res = await fetch(getDeleteDashboardUrl(organizationId,dashboardId),
+  {
+      credentials: 'include',
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: deleteDashboardResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as deleteDashboardResponse
+}
+
+
+
+
+export const getDeleteDashboardMutationOptions = <TError = ErrorModel,
+    TContext = unknown>(options?: { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof deleteDashboard>>, TError,{organizationId: string;dashboardId: string}, TContext>, fetch?: RequestInit}
+): CreateMutationOptions<Awaited<ReturnType<typeof deleteDashboard>>, TError,{organizationId: string;dashboardId: string}, TContext> => {
+
+const mutationKey = ['deleteDashboard'];
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDashboard>>, {organizationId: string;dashboardId: string}> = (props) => {
+          const {organizationId,dashboardId} = props ?? {};
+
+          return  deleteDashboard(organizationId,dashboardId,fetchOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteDashboardMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDashboard>>>
+    
+    export type DeleteDashboardMutationError = ErrorModel
+
+    export const createDeleteDashboard = <TError = ErrorModel,
+    TContext = unknown>(options?: () => { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof deleteDashboard>>, TError,{organizationId: string;dashboardId: string}, TContext>, fetch?: RequestInit}
+ , queryClient?: () => QueryClient): CreateMutationResult<
+        Awaited<ReturnType<typeof deleteDashboard>>,
+        TError,
+        {organizationId: string;dashboardId: string},
+        TContext
+      > => {
+      return createMutation(() => ({ ...getDeleteDashboardMutationOptions(options?.()), queryClient }));
+    }
     export type getDashboardResponse200 = {
   data: Dashboard
   status: 200
@@ -444,96 +536,5 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
         TContext
       > => {
       return createMutation(() => ({ ...getUpdateDashboardMutationOptions(options?.()), queryClient }));
-    }
-    export type deleteDashboardResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteDashboardResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-    
-export type deleteDashboardResponseSuccess = (deleteDashboardResponse204) & {
-  headers: Headers;
-};
-export type deleteDashboardResponseError = (deleteDashboardResponseDefault) & {
-  headers: Headers;
-};
-
-export type deleteDashboardResponse = (deleteDashboardResponseSuccess | deleteDashboardResponseError)
-
-export const getDeleteDashboardUrl = (organizationId: string,
-    dashboardId: string,) => {
-
-
-  
-
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/dashboards/${dashboardId}`
-}
-
-export const deleteDashboard = async (organizationId: string,
-    dashboardId: string, options?: RequestInit): Promise<deleteDashboardResponse> => {
-  
-  const res = await fetch(getDeleteDashboardUrl(organizationId,dashboardId),
-  {
-      credentials: 'include',
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: deleteDashboardResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteDashboardResponse
-}
-
-
-
-
-export const getDeleteDashboardMutationOptions = <TError = ErrorModel,
-    TContext = unknown>(options?: { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof deleteDashboard>>, TError,{organizationId: string;dashboardId: string}, TContext>, fetch?: RequestInit}
-): CreateMutationOptions<Awaited<ReturnType<typeof deleteDashboard>>, TError,{organizationId: string;dashboardId: string}, TContext> => {
-
-const mutationKey = ['deleteDashboard'];
-const {mutation: mutationOptions, fetch: fetchOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, fetch: undefined};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDashboard>>, {organizationId: string;dashboardId: string}> = (props) => {
-          const {organizationId,dashboardId} = props ?? {};
-
-          return  deleteDashboard(organizationId,dashboardId,fetchOptions)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteDashboardMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDashboard>>>
-    
-    export type DeleteDashboardMutationError = ErrorModel
-
-    export const createDeleteDashboard = <TError = ErrorModel,
-    TContext = unknown>(options?: () => { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof deleteDashboard>>, TError,{organizationId: string;dashboardId: string}, TContext>, fetch?: RequestInit}
- , queryClient?: () => QueryClient): CreateMutationResult<
-        Awaited<ReturnType<typeof deleteDashboard>>,
-        TError,
-        {organizationId: string;dashboardId: string},
-        TContext
-      > => {
-      return createMutation(() => ({ ...getDeleteDashboardMutationOptions(options?.()), queryClient }));
     }
     

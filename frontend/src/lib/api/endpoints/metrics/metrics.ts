@@ -22,10 +22,10 @@ import type {
   GetMetricCatalogParams,
   GetMetricSummaryOutputBody,
   GetMetricSummaryParams,
-  GetREDMetricsOutputBody,
   GetRedMetricsParams,
   QueryTimeseriesOutputBody,
-  QueryTimeseriesParams
+  QueryTimeseriesParams,
+  REDMetrics
 } from '../../model';
 
 
@@ -147,115 +147,8 @@ export function createGetMetricCatalog<TData = Awaited<ReturnType<typeof getMetr
 
 
 
-export type queryTimeseriesResponse200 = {
-  data: QueryTimeseriesOutputBody
-  status: 200
-}
-
-export type queryTimeseriesResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-    
-export type queryTimeseriesResponseSuccess = (queryTimeseriesResponse200) & {
-  headers: Headers;
-};
-export type queryTimeseriesResponseError = (queryTimeseriesResponseDefault) & {
-  headers: Headers;
-};
-
-export type queryTimeseriesResponse = (queryTimeseriesResponseSuccess | queryTimeseriesResponseError)
-
-export const getQueryTimeseriesUrl = (organizationId: string,
-    params: QueryTimeseriesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries`
-}
-
-export const queryTimeseries = async (organizationId: string,
-    params: QueryTimeseriesParams, options?: RequestInit): Promise<queryTimeseriesResponse> => {
-  
-  const res = await fetch(getQueryTimeseriesUrl(organizationId,params),
-  {
-      credentials: 'include',
-    ...options,
-    method: 'GET'
-    
-    
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: queryTimeseriesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as queryTimeseriesResponse
-}
-
-
-
-
-
-export const getQueryTimeseriesQueryKey = (organizationId: string,
-    params?: QueryTimeseriesParams,) => {
-    return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries`, ...(params ? [params] : [])
-    ] as const;
-    }
-
-    
-export const getQueryTimeseriesQueryOptions = <TData = Awaited<ReturnType<typeof queryTimeseries>>, TError = ErrorModel>(organizationId: string,
-    params: QueryTimeseriesParams, options?: { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof queryTimeseries>>, TError, TData>>, fetch?: RequestInit}
-) => {
-
-const {query: queryOptions, fetch: fetchOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getQueryTimeseriesQueryKey(organizationId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof queryTimeseries>>> = ({ signal }) => queryTimeseries(organizationId,params, { signal, ...fetchOptions });
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(organizationId), ...queryOptions} as CreateQueryOptions<Awaited<ReturnType<typeof queryTimeseries>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type QueryTimeseriesQueryResult = NonNullable<Awaited<ReturnType<typeof queryTimeseries>>>
-export type QueryTimeseriesQueryError = ErrorModel
-
-
-
-export function createQueryTimeseries<TData = Awaited<ReturnType<typeof queryTimeseries>>, TError = ErrorModel>(
- organizationId: () =>  string,
-    params: () =>  QueryTimeseriesParams, options?: () => { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof queryTimeseries>>, TError, TData>>, fetch?: RequestInit}
- , queryClient?: () => QueryClient 
- ): CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  
-
-  const query = createQuery(() => getQueryTimeseriesQueryOptions(organizationId(),
-    params(),options?.()), queryClient) as CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return query
-}
-
-
-
-
 export type getRedMetricsResponse200 = {
-  data: GetREDMetricsOutputBody
+  data: REDMetrics
   status: 200
 }
 
@@ -460,6 +353,113 @@ export function createGetMetricSummary<TData = Awaited<ReturnType<typeof getMetr
   
 
   const query = createQuery(() => getGetMetricSummaryQueryOptions(organizationId(),
+    params(),options?.()), queryClient) as CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return query
+}
+
+
+
+
+export type queryTimeseriesResponse200 = {
+  data: QueryTimeseriesOutputBody
+  status: 200
+}
+
+export type queryTimeseriesResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+    
+export type queryTimeseriesResponseSuccess = (queryTimeseriesResponse200) & {
+  headers: Headers;
+};
+export type queryTimeseriesResponseError = (queryTimeseriesResponseDefault) & {
+  headers: Headers;
+};
+
+export type queryTimeseriesResponse = (queryTimeseriesResponseSuccess | queryTimeseriesResponseError)
+
+export const getQueryTimeseriesUrl = (organizationId: string,
+    params: QueryTimeseriesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries`
+}
+
+export const queryTimeseries = async (organizationId: string,
+    params: QueryTimeseriesParams, options?: RequestInit): Promise<queryTimeseriesResponse> => {
+  
+  const res = await fetch(getQueryTimeseriesUrl(organizationId,params),
+  {
+      credentials: 'include',
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: queryTimeseriesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as queryTimeseriesResponse
+}
+
+
+
+
+
+export const getQueryTimeseriesQueryKey = (organizationId: string,
+    params?: QueryTimeseriesParams,) => {
+    return [
+    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+    
+export const getQueryTimeseriesQueryOptions = <TData = Awaited<ReturnType<typeof queryTimeseries>>, TError = ErrorModel>(organizationId: string,
+    params: QueryTimeseriesParams, options?: { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof queryTimeseries>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getQueryTimeseriesQueryKey(organizationId,params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof queryTimeseries>>> = ({ signal }) => queryTimeseries(organizationId,params, { signal, ...fetchOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(organizationId), ...queryOptions} as CreateQueryOptions<Awaited<ReturnType<typeof queryTimeseries>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type QueryTimeseriesQueryResult = NonNullable<Awaited<ReturnType<typeof queryTimeseries>>>
+export type QueryTimeseriesQueryError = ErrorModel
+
+
+
+export function createQueryTimeseries<TData = Awaited<ReturnType<typeof queryTimeseries>>, TError = ErrorModel>(
+ organizationId: () =>  string,
+    params: () =>  QueryTimeseriesParams, options?: () => { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof queryTimeseries>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: () => QueryClient 
+ ): CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  
+
+  const query = createQuery(() => getQueryTimeseriesQueryOptions(organizationId(),
     params(),options?.()), queryClient) as CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return query

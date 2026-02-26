@@ -6,9 +6,9 @@
  */
 
 export interface MetricMeta {
+  description: string;
   name: string;
+  service_name: string;
   type: string;
   unit: string;
-  description: string;
-  service_name: string;
 }

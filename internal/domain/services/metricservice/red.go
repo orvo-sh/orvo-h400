@@ -24,27 +24,27 @@ func (s *service) GetREDMetrics(ctx context.Context, input GetREDMetricsInput) (
 
 	step := normalizeStep(input.StartTime, input.EndTime, input.Step)
 
-	requestRate, err := s.queryREDSeries(ctx, input, "spans.request.count", "rate", step)
+	requestRate, err := s.queryREDSeries(ctx, input, derivedMetricRequestsRate, "rate", step)
 	if err != nil {
 		return nil, err
 	}
-	errorRate, err := s.queryREDSeries(ctx, input, "spans.error.count", "rate", step)
+	errorRate, err := s.queryREDSeries(ctx, input, derivedMetricErrorsRate, "rate", step)
 	if err != nil {
 		return nil, err
 	}
-	p50, err := s.queryREDSeries(ctx, input, "spans.duration", "p50", step)
+	p50, err := s.queryREDSeries(ctx, input, derivedMetricLatencyP50MS, "p50", step)
 	if err != nil {
 		return nil, err
 	}
-	p90, err := s.queryREDSeries(ctx, input, "spans.duration", "p90", step)
+	p90, err := s.queryREDSeries(ctx, input, derivedMetricLatencyP90MS, "p90", step)
 	if err != nil {
 		return nil, err
 	}
-	p95, err := s.queryREDSeries(ctx, input, "spans.duration", "p95", step)
+	p95, err := s.queryREDSeries(ctx, input, derivedMetricLatencyP95MS, "p95", step)
 	if err != nil {
 		return nil, err
 	}
-	p99, err := s.queryREDSeries(ctx, input, "spans.duration", "p99", step)
+	p99, err := s.queryREDSeries(ctx, input, derivedMetricLatencyP99MS, "p99", step)
 	if err != nil {
 		return nil, err
 	}

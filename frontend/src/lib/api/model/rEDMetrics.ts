@@ -7,8 +7,8 @@
 import type { TimeseriesPoint } from './timeseriesPoint';
 
 export interface REDMetrics {
-  /** @nullable */
-  request_rate: TimeseriesPoint[] | null;
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
   /** @nullable */
   error_rate: TimeseriesPoint[] | null;
   /** @nullable */
@@ -19,4 +19,6 @@ export interface REDMetrics {
   p95_latency: TimeseriesPoint[] | null;
   /** @nullable */
   p99_latency: TimeseriesPoint[] | null;
+  /** @nullable */
+  request_rate: TimeseriesPoint[] | null;
 }

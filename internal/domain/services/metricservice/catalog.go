@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -105,6 +106,15 @@ func (s *service) GetMetricCatalog(ctx context.Context, input GetMetricCatalogIn
 		s.logger.ErrorContext(ctx, "GetMetricCatalog: rows iteration error", slog.Any("error", err))
 		return nil, errs.ErrInternal
 	}
+
+	metrics, derr := s.appendDerivedMetricsFromTraces(ctx, input, metrics)
+	if derr != nil {
+		return nil, derr
+	}
+
+	sort.Slice(metrics, func(i, j int) bool {
+		return metrics[i].Name < metrics[j].Name
+	})
 
 	return &GetMetricCatalogOutput{Metrics: metrics}, nil
 }

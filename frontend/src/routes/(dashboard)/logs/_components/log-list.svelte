@@ -14,7 +14,9 @@
 		onToggleLive = () => {},
 		onLoadMore = undefined,
 		hasMore = false,
-		loading = false
+		loading = false,
+		onAutoResolve = undefined,
+		autoResolveBusyLogID = undefined
 	}: {
 		logs: LogRecord[];
 		isLive?: boolean;
@@ -22,6 +24,8 @@
 		onLoadMore?: (() => void) | undefined;
 		hasMore?: boolean;
 		loading?: boolean;
+		onAutoResolve?: ((log: LogRecord) => void) | undefined;
+		autoResolveBusyLogID?: string | undefined;
 	} = $props();
 
 	let expandedTimestamps = $state<Set<string>>(new Set());
@@ -54,6 +58,8 @@
 						{log}
 						expanded={expandedTimestamps.has(log.timestamp)}
 						onToggle={() => toggleExpanded(log.timestamp)}
+						onAutoResolve={() => onAutoResolve?.(log)}
+						autoResolveBusy={autoResolveBusyLogID === log.id}
 					/>
 				{/each}
 			</div>

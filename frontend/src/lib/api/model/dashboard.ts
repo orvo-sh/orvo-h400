@@ -8,15 +8,17 @@ import type { DashboardLayout } from './dashboardLayout';
 import type { DashboardPanel } from './dashboardPanel';
 
 export interface Dashboard {
-  id: string;
-  organization_id: string;
-  name: string;
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  created_at: string;
+  created_by: string;
   description: string;
-  /** @nullable */
-  panels: DashboardPanel[] | null;
+  id: string;
   /** @nullable */
   layout: DashboardLayout[] | null;
-  created_by: string;
-  created_at: string;
+  name: string;
+  organization_id: string;
+  /** @nullable */
+  panels: DashboardPanel[] | null;
   updated_at: string;
 }

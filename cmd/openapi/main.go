@@ -40,6 +40,12 @@ func main() {
 	handlers.NewApiKeyHandler(nil).RegisterRoutes(api)
 	handlers.NewLogHandler(nil, nil).RegisterRoutes(api)
 	handlers.NewTraceHandler(nil, nil).RegisterRoutes(api)
+	handlers.NewMetricHandler(nil, nil).RegisterRoutes(api)
+	handlers.NewDashboardHandler(nil, nil).RegisterRoutes(api)
+	handlers.NewArchiveHandler(nil, nil).RegisterRoutes(api)
+	handlers.NewGithubHandler(nil, nil).RegisterRoutes(api)
+	handlers.NewSandboxHandler(nil, nil).RegisterRoutes(api)
+	handlers.NewRemediationHandler(nil, nil).RegisterRoutes(api)
 
 	spec, err := api.OpenAPI().YAML()
 	if err != nil {

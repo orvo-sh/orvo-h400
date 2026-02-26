@@ -8,6 +8,6 @@
 export interface GetMetricSummaryOutputBody {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  value: number;
   timestamp: string;
+  value: number;
 }

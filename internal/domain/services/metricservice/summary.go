@@ -19,6 +19,10 @@ func (s *service) GetMetricSummary(ctx context.Context, input GetMetricSummaryIn
 		slog.String("aggregation", input.Aggregation),
 	)
 
+	if isDerivedMetricName(input.MetricName) {
+		return s.queryDerivedSummary(ctx, input)
+	}
+
 	if input.Aggregation == "" {
 		input.Aggregation = "avg"
 	}

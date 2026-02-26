@@ -37,6 +37,13 @@ func ToHTTPError(err apperr.Error) error {
 	if restoreErr, ok := err.(*errs.RestoreRequiredError); ok {
 		return ToRestoreRequiredError(restoreErr)
 	}
+	if mappingMissingErr, ok := err.(*errs.AutoResolveMappingMissingError); ok {
+		return huma.NewError(http.StatusConflict, mappingMissingErr.Code(), &huma.ErrorDetail{
+			Location: "auto_resolve.service_name",
+			Message:  "service name",
+			Value:    mappingMissingErr.ServiceName,
+		})
+	}
 
 	return huma.NewError(err.Status(), err.Code())
 }

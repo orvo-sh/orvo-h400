@@ -6,9 +6,9 @@
  */
 
 export interface DashboardLayout {
+  h: number;
   panel_id: string;
+  w: number;
   x: number;
   y: number;
-  w: number;
-  h: number;
 }

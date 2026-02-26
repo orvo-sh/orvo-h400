@@ -35,7 +35,7 @@ service?: string;
  */
 group_by?: string;
 /**
- * Attribute filters as key=value pairs separated by commas
+ * Attribute filters as key=value pairs separated by commas (e.g. span.name=GET /api,span.kind=2)
  */
 filters?: string;
 };

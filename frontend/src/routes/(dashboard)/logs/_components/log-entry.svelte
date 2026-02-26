@@ -6,6 +6,7 @@
 	import CopyIcon from '@lucide/svelte/icons/copy';
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import ClockIcon from '@lucide/svelte/icons/clock';
+	import WandSparklesIcon from '@lucide/svelte/icons/wand-sparkles';
 	import type { LogRecord } from '$lib/api/model';
 
 	type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal';
@@ -22,11 +23,15 @@
 	let {
 		log,
 		expanded = false,
-		onToggle = () => {}
+		onToggle = () => {},
+		onAutoResolve = () => {},
+		autoResolveBusy = false
 	}: {
 		log: LogRecord;
 		expanded?: boolean;
 		onToggle?: () => void;
+		onAutoResolve?: () => void;
+		autoResolveBusy?: boolean;
 	} = $props();
 
 	function formatTimestamp(iso: string): string {
@@ -94,6 +99,7 @@
 
 	const level = $derived(getSeverityLevel(log.severity_text));
 	const host = $derived(log.resource_attributes?.['host.name'] ?? '');
+	const showAutoResolve = $derived(level === 'error' || level === 'fatal');
 
 	// Merge all attributes for expanded view
 	const allAttributes = $derived.by(() => {
@@ -229,6 +235,16 @@
 					<ClockIcon class="mr-1 size-4" />
 					Open time detective
 				</Button>
+				{#if showAutoResolve}
+					<Button variant="default" size="sm" onclick={onAutoResolve} disabled={autoResolveBusy}>
+						<WandSparklesIcon class="mr-1 size-4" />
+						{#if autoResolveBusy}
+							Preparing...
+						{:else}
+							Auto Resolve
+						{/if}
+					</Button>
+				{/if}
 			</div>
 		</div>
 	{/if}

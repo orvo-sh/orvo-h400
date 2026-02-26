@@ -9,8 +9,8 @@ import type { DashboardPanelVisualization } from './dashboardPanelVisualization'
 
 export interface DashboardPanel {
   id: string;
+  query: DashboardPanelQuery;
   title: string;
   type: string;
-  query: DashboardPanelQuery;
   visualization?: DashboardPanelVisualization;
 }

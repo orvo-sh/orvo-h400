@@ -7,10 +7,10 @@
 import type { DashboardPanelQueryFilters } from './dashboardPanelQueryFilters';
 
 export interface DashboardPanelQuery {
-  metric_name: string;
+  aggregation: string;
   filters?: DashboardPanelQueryFilters;
   /** @nullable */
   group_by?: string[] | null;
-  aggregation: string;
+  metric_name: string;
   step?: string;
 }
