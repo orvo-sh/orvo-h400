@@ -65,7 +65,8 @@ grep -v '^HOST_IDENTIFIER=' runtime/collector.env >"$tmp_collector_env" || true
 printf 'HOST_IDENTIFIER=%s\n' "$host_identifier" >>"$tmp_collector_env"
 mv "$tmp_collector_env" runtime/collector.env
 
-docker compose up -d otel-collector caddy
+docker compose up -d otel-collector
+docker compose up -d --force-recreate caddy
 
 for _ in $(seq 1 20); do
   caddy_status="$(docker inspect -f '{{.State.Status}}' orvo-caddy 2>/dev/null || true)"
