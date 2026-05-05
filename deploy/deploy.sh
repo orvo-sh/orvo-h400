@@ -31,6 +31,8 @@ if docker compose config >/dev/null; then
 fi
 
 docker compose build sandbox-image orvo
+docker run --rm "${SANDBOX_DEFAULT_IMAGE:-orvo-opencode-sandbox:local}" \
+  sh -lc 'git ls-remote https://github.com/octocat/Hello-World >/dev/null'
 docker compose up -d postgres orvo
 
 host_port="${ORVO_HTTP_PORT:-80}"
