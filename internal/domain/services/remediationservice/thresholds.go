@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"math"
 	"strings"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 )
 
 const (
-	autoResolveThresholdMetricName = "derived.errors.rate"
+	autoResolveThresholdMetricName = "derived.errors.total"
 	defaultThresholdLookback       = 5 * time.Minute
 	defaultThresholdCooldown       = 15 * time.Minute
 	defaultThresholdQuorum         = 3
@@ -40,13 +39,13 @@ type UpsertAutoResolveThresholdInput struct {
 }
 
 type thresholdEvaluation struct {
-	Signal              float64
-	SampleCount         int
-	BreachSamples       int
-	EstimatedErrorCount int
-	PeakSignal          float64
-	LatestSignal        float64
-	Breached            bool
+	Signal             float64
+	SampleCount        int
+	BreachSamples      int
+	ObservedErrorCount int
+	PeakSignal         float64
+	LatestSignal       float64
+	Breached           bool
 }
 
 func (s *service) ensureAutoResolveThresholdSchema(ctx context.Context) apperr.Error {
@@ -57,7 +56,7 @@ func (s *service) ensureAutoResolveThresholdSchema(ctx context.Context) apperr.E
 				id VARCHAR(32) PRIMARY KEY,
 				organization_id VARCHAR(32) NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
 				service_name TEXT NOT NULL,
-				metric_name TEXT NOT NULL DEFAULT 'derived.errors.rate',
+				metric_name TEXT NOT NULL DEFAULT 'derived.errors.total',
 				threshold_value DOUBLE PRECISION NOT NULL CHECK (threshold_value > 0),
 				lookback_window_seconds INT NOT NULL CHECK (lookback_window_seconds > 0),
 				cooldown_seconds INT NOT NULL CHECK (cooldown_seconds > 0),
@@ -78,6 +77,10 @@ func (s *service) ensureAutoResolveThresholdSchema(ctx context.Context) apperr.E
 			`
 			CREATE INDEX IF NOT EXISTS idx_auto_resolve_thresholds_service
 				ON auto_resolve_thresholds (organization_id, service_name)
+			`,
+			`
+			ALTER TABLE auto_resolve_thresholds
+			ALTER COLUMN metric_name SET DEFAULT 'derived.errors.total'
 			`,
 		}
 
@@ -343,7 +346,7 @@ func (s *service) processAutoResolveThreshold(ctx context.Context, threshold mod
 		StartTime:      now.Add(-lookback),
 		EndTime:        now,
 		Step:           autoResolveThresholdStep(lookback),
-		Aggregation:    "rate",
+		Aggregation:    "sum",
 		ServiceName:    threshold.ServiceName,
 	})
 	if appErr != nil {
@@ -394,6 +397,7 @@ func (s *service) processAutoResolveThreshold(ctx context.Context, threshold mod
 		slog.String("organization_id", threshold.OrganizationID),
 		slog.String("service_name", threshold.ServiceName),
 		slog.Float64("threshold_value", threshold.ThresholdValue),
+		slog.Int("observed_error_count", evaluation.ObservedErrorCount),
 		slog.String("log_id", logRecord.ID),
 		slog.String("job_id", job.ID),
 	)
@@ -477,17 +481,27 @@ func evaluateThresholdSeries(
 		}
 	}
 
-	estimatedErrors := int(math.Round(sum * float64(bucketSeconds)))
+	observedErrors := int(sum)
 	latestSignal := points[len(points)-1].Value
+	requiredErrors := int(thresholdValue)
+	if thresholdValue > float64(requiredErrors) {
+		requiredErrors++
+	}
+	if requiredErrors <= 0 {
+		requiredErrors = 1
+	}
+	if quorum <= 0 {
+		quorum = 1
+	}
 
 	return thresholdEvaluation{
-		Signal:              sum / float64(len(points)),
-		SampleCount:         len(points),
-		BreachSamples:       breachSamples,
-		EstimatedErrorCount: estimatedErrors,
-		PeakSignal:          peak,
-		LatestSignal:        latestSignal,
-		Breached:            estimatedErrors >= quorum && peak >= thresholdValue,
+		Signal:             sum / float64(len(points)),
+		SampleCount:        len(points),
+		BreachSamples:      breachSamples,
+		ObservedErrorCount: observedErrors,
+		PeakSignal:         peak,
+		LatestSignal:       latestSignal,
+		Breached:           observedErrors >= requiredErrors && observedErrors >= quorum,
 	}
 }
 

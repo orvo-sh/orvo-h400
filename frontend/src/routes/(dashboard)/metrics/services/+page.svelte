@@ -47,6 +47,14 @@
 	let thresholdQuorum = $state('5');
 	let thresholdEnabled = $state(true);
 
+	const thresholdWindowSeconds: Record<ThresholdWindow, number> = {
+		'10s': 10,
+		'30s': 30,
+		'1m': 60,
+		'5m': 300,
+		'15m': 900
+	};
+
 	const orgId = $derived($sessionStore?.active_organization?.id ?? '');
 
 	const timeRangeMs: Record<string, number> = {
@@ -271,6 +279,19 @@
 		return value.toFixed(2);
 	}
 
+	function formatErrorCount(value: number | undefined): string {
+		if (value === undefined || !Number.isFinite(value)) return '0';
+		return Math.max(1, Math.ceil(value)).toString();
+	}
+
+	function thresholdWindowToSeconds(window: ThresholdWindow): number {
+		return thresholdWindowSeconds[window];
+	}
+
+	function ratePointToErrorCount(point: TimeseriesPoint, window: ThresholdWindow): number {
+		return Math.max(1, Math.ceil(point.value * thresholdWindowToSeconds(window)));
+	}
+
 	function syncThresholdForm() {
 		const threshold = selectedServiceThreshold;
 		if (!threshold) {
@@ -283,7 +304,7 @@
 			return;
 		}
 
-		thresholdValueInput = threshold.threshold_value.toFixed(2);
+		thresholdValueInput = formatErrorCount(threshold.threshold_value);
 		thresholdWindow = normalizeThresholdWindow(threshold.lookback_window);
 		thresholdCooldown = normalizeThresholdCooldown(threshold.cooldown);
 		thresholdQuorum = String(threshold.quorum);
@@ -345,8 +366,11 @@
 	}
 
 	function handleThresholdPointSelect(point: TimeseriesPoint) {
-		thresholdValueInput = point.value.toFixed(2);
-		thresholdHint = `Selected ${formatRate(point.value)} err/s from ${new Date(point.time).toLocaleTimeString()}.`;
+		const errorCount = ratePointToErrorCount(point, thresholdWindow);
+		thresholdValueInput = String(errorCount);
+		thresholdHint =
+			`Selected about ${errorCount} errors in ${thresholdWindow} from ` +
+			`${new Date(point.time).toLocaleTimeString()} (${formatRate(point.value)} err/s).`;
 		thresholdsError = null;
 	}
 
@@ -589,16 +613,19 @@
 							<Badge variant={thresholdStatus.variant}>{thresholdStatus.label}</Badge>
 						</div>
 						<Card.Description>
-							Click a point on the Error Rate chart, then save. Auto Resolve can start after the
-							service crosses that rate within the selected window, enough requests fail, and the
-							service is mapped to a repository.
+							Save the number of errors you want to tolerate inside the selected window. Auto
+							Resolve can start after the service reaches that error count, enough requests fail,
+							and the service is mapped to a repository.
 						</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-4">
 						<div class="rounded-md border bg-muted/30 p-3 text-sm">
 							<p class="font-medium text-foreground">How this works</p>
 							<p class="mt-1 text-muted-foreground">
-								Threshold: <span class="font-medium text-foreground">{formatRate(thresholdValue)} err/s</span>
+								Threshold:
+								<span class="font-medium text-foreground">
+									{formatErrorCount(thresholdValue)} errors per {thresholdWindow}
+								</span>
 							</p>
 							<p class="text-muted-foreground">
 								Window: <span class="font-medium text-foreground">{thresholdWindow}</span>
@@ -609,13 +636,13 @@
 						</div>
 
 						<div class="space-y-2">
-							<Label for="threshold-value">Threshold (err/s)</Label>
+							<Label for="threshold-value">Error count threshold</Label>
 							<Input
 								id="threshold-value"
 								type="number"
-								min="0"
-								step="0.01"
-								placeholder="Click the chart to fill this"
+								min="1"
+								step="1"
+								placeholder="Click the chart to estimate this"
 								bind:value={thresholdValueInput}
 							/>
 						</div>
