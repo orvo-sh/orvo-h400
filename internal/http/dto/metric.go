@@ -69,3 +69,25 @@ type GetMetricSummaryOutput struct {
 		Timestamp string  `json:"timestamp"`
 	}
 }
+
+// --- Derived Metrics Recalculation ---
+
+type RecalculateDerivedMetricsInput struct {
+	OrganizationID string `path:"organization_id"`
+	Service        string `query:"service" doc:"Filter by service name" required:"false"`
+	Lookback       string `query:"lookback" doc:"Lookback window to recalculate (e.g. 15m, 1h, 24h). Defaults to 1h." required:"false"`
+}
+
+type RecalculateDerivedMetricsOutput struct {
+	Body struct {
+		OrganizationID      string `json:"organization_id"`
+		ServiceName         string `json:"service_name,omitempty"`
+		WindowStart         string `json:"window_start"`
+		WindowEnd           string `json:"window_end"`
+		AsOf                string `json:"as_of"`
+		RequestSpanCount    int64  `json:"request_span_count"`
+		ErrorSpanCount      int64  `json:"error_span_count"`
+		ErrorLogCount       int64  `json:"error_log_count"`
+		CombinedErrorEvents int64  `json:"combined_error_events"`
+	}
+}

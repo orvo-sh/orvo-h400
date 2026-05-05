@@ -89,7 +89,7 @@ export const getCreateRestoreJobUrl = (organizationId: string,) => {
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/archive/restores`
+  return `/api/v1/organizations/${organizationId}/archive/restores`
 }
 
 export const createRestoreJob = async (organizationId: string,
@@ -181,7 +181,7 @@ export const getGetRestoreJobUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/archive/restores/${restoreJobId}`
+  return `/api/v1/organizations/${organizationId}/archive/restores/${restoreJobId}`
 }
 
 export const getRestoreJob = async (organizationId: string,
@@ -210,7 +210,7 @@ export const getRestoreJob = async (organizationId: string,
 export const getGetRestoreJobQueryKey = (organizationId: string,
     restoreJobId: string,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/archive/restores/${restoreJobId}`
+    `/api/v1/organizations/${organizationId}/archive/restores/${restoreJobId}`
     ] as const;
     }
 

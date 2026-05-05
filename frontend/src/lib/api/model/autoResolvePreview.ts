@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AutoResolveContextSummary } from './autoResolveContextSummary';
+import type { AutoResolveRepositoryContext } from './autoResolveRepositoryContext';
 
 export interface AutoResolvePreview {
   /** A URL to the JSON Schema for this object. */
@@ -13,6 +14,8 @@ export interface AutoResolvePreview {
   commit_message: string;
   context_summary: AutoResolveContextSummary;
   log_id: string;
+  /** @nullable */
+  related_repositories: AutoResolveRepositoryContext[] | null;
   repository_full_name: string;
   repository_id: string;
   service_name: string;

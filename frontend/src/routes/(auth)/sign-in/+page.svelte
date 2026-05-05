@@ -1,5 +1,4 @@
 <script lang="ts">
-	import * as Form from '$lib/components/ui/form';
 	import { z } from 'zod';
 
 	import { IconBrandGoogle } from '@tabler/icons-svelte';
@@ -9,47 +8,44 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Logo } from '$lib/components/ui/logo';
 	import { login } from '$lib/api/endpoints/auth/auth';
-	import { superForm } from 'sveltekit-superforms';
-	import { zod4Client } from 'sveltekit-superforms/adapters';
 
+	const signInSchema = z.object({
+		email: z.string().email(),
+		password: z.string().min(1)
+	});
+
+	let email = $state('');
+	let password = $state('');
 	let error = $state('');
+	let submitting = $state(false);
 
-	const form = superForm(
-		{
-			email: '',
-			password: ''
-		},
-		{
-			SPA: true,
-			validators: zod4Client(
-				z.object({
-					email: z.string().email(),
-					password: z.string().min(1)
-				})
-			),
-			onSubmit: async () => {
-				error = '';
-			},
-			onResult: async () => {
-				const data = $formData;
-				try {
-					const res = await login({
-						email: data.email,
-						password: data.password
-					});
-					if (res.status === 204) {
-						goto('/logs');
-					} else {
-						error = (res.data as any)?.detail ?? 'Invalid email or password';
-					}
-				} catch (e) {
-					error = 'An unexpected error occurred';
-				}
-			}
+	async function handleSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		error = '';
+
+		const parsed = signInSchema.safeParse({
+			email,
+			password
+		});
+		if (!parsed.success) {
+			error = parsed.error.issues[0]?.message ?? 'Enter a valid email and password';
+			return;
 		}
-	);
 
-	let formData = form.form;
+		submitting = true;
+		try {
+			const res = await login(parsed.data);
+			if (res.status === 204) {
+				await goto('/logs');
+				return;
+			}
+			error = (res.data as any)?.detail ?? 'Invalid email or password';
+		} catch {
+			error = 'An unexpected error occurred';
+		} finally {
+			submitting = false;
+		}
+	}
 </script>
 
 <div
@@ -75,23 +71,24 @@
 				<div class="text-destructive bg-destructive/10 rounded-md px-3 py-2 text-sm">{error}</div>
 			{/if}
 
-			<form method="POST" use:form.enhance>
-				{#each ['email', 'password'] as const as f}
-					<Form.Field name={f} {form}>
-						<Form.Control>
-							{#snippet children({ props })}
-								<Form.Label>
-									{f.charAt(0).toUpperCase() + f.slice(1)}
-								</Form.Label>
-								<Input {...props} bind:value={$formData[f]} type={f} />
-							{/snippet}
-						</Form.Control>
-						<Form.Description />
-						<Form.FieldErrors />
-					</Form.Field>
-				{/each}
+			<form method="POST" onsubmit={handleSubmit} class="space-y-4">
+				<div class="space-y-2">
+					<label class="text-sm font-medium" for="email">Email</label>
+					<Input id="email" bind:value={email} type="email" />
+				</div>
 
-				<Form.Button class="w-full">Sign in</Form.Button>
+				<div class="space-y-2">
+					<label class="text-sm font-medium" for="password">Password</label>
+					<Input id="password" bind:value={password} type="password" />
+				</div>
+
+				<Button class="w-full" type="submit" disabled={submitting}>
+					{#if submitting}
+						Signing in...
+					{:else}
+						Sign in
+					{/if}
+				</Button>
 			</form>
 
 			<div class="relative">

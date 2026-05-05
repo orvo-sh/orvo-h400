@@ -102,7 +102,7 @@ export const getListSandboxJobsUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/sandbox/jobs?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/sandbox/jobs`
 }
 
 export const listSandboxJobs = async (organizationId: string,
@@ -131,7 +131,7 @@ export const listSandboxJobs = async (organizationId: string,
 export const getListSandboxJobsQueryKey = (organizationId: string,
     params?: ListSandboxJobsParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/sandbox/jobs`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -201,7 +201,7 @@ export const getCreateSandboxJobUrl = (organizationId: string,) => {
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs`
+  return `/api/v1/organizations/${organizationId}/sandbox/jobs`
 }
 
 export const createSandboxJob = async (organizationId: string,
@@ -293,7 +293,7 @@ export const getGetSandboxJobUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}`
+  return `/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}`
 }
 
 export const getSandboxJob = async (organizationId: string,
@@ -322,7 +322,7 @@ export const getSandboxJob = async (organizationId: string,
 export const getGetSandboxJobQueryKey = (organizationId: string,
     jobId: string,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}`
+    `/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}`
     ] as const;
     }
 
@@ -393,7 +393,7 @@ export const getCancelSandboxJobUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}/cancel`
+  return `/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}/cancel`
 }
 
 export const cancelSandboxJob = async (organizationId: string,
@@ -492,7 +492,7 @@ export const getGetSandboxJobLogsUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}/logs?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}/logs`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}/logs?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}/logs`
 }
 
 export const getSandboxJobLogs = async (organizationId: string,
@@ -523,7 +523,7 @@ export const getGetSandboxJobLogsQueryKey = (organizationId: string,
     jobId: string,
     params?: GetSandboxJobLogsParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}/logs`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/sandbox/jobs/${jobId}/logs`, ...(params ? [params] : [])
     ] as const;
     }
 

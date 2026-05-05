@@ -11,6 +11,8 @@ const (
 	SandboxJobStateFailed    SandboxJobState = "failed"
 	SandboxJobStateCancelled SandboxJobState = "cancelled"
 	SandboxJobStateTimedOut  SandboxJobState = "timed_out"
+
+	AutoResolveOpencodeCommandMarker = "ORVO_AUTO_RESOLVE_STEP=opencode"
 )
 
 type SandboxJob struct {

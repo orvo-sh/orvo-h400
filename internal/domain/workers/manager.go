@@ -47,7 +47,11 @@ func NewManager(logger *slog.Logger, pool *pgxpool.Pool, config ManagerConfig) *
 
 	c := cron.New(
 		cron.WithLocation(config.Timezone),
-		cron.WithParser(cron.NewParser(cron.Minute|cron.Hour|cron.Dom|cron.Month|cron.Dow)),
+		cron.WithParser(
+			cron.NewParser(
+				cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow,
+			),
+		),
 		cron.WithChain(cron.Recover(cron.DefaultLogger)),
 	)
 

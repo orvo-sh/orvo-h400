@@ -14,6 +14,8 @@
 	import { sessionStore } from '$lib/stores/session';
 	import type { Span } from '$lib/api/model';
 
+	const SLOW_TRACE_THRESHOLD_NS = 3_000_000_000;
+
 	const traceId = $derived(page.params.traceId ?? '');
 	const traceBreadcrumb = $derived(traceId ? traceId.slice(0, 8) + '...' : 'Trace');
 	const orgId = $derived($sessionStore?.active_organization?.id ?? '');
@@ -144,8 +146,13 @@
 				<div class="flex items-center gap-3">
 					<div class="flex items-center gap-1.5 text-sm">
 						<ClockIcon class="size-4 text-muted-foreground" />
-						<span class="font-semibold">{formatDuration(traceSummary.durationNs)}</span>
+						<span class="font-semibold {traceSummary.durationNs >= SLOW_TRACE_THRESHOLD_NS ? 'text-red-500' : ''}">
+							{formatDuration(traceSummary.durationNs)}
+						</span>
 					</div>
+					{#if traceSummary.durationNs >= SLOW_TRACE_THRESHOLD_NS}
+						<Badge variant="destructive">Took Too Long</Badge>
+					{/if}
 					<Badge variant="outline" class="gap-1">
 						<LayersIcon class="size-3" />
 						{traceSummary.spanCount} spans

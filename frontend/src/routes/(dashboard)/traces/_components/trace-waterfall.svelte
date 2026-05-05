@@ -14,6 +14,8 @@
 		onSelectSpan?: (span: Span) => void;
 	} = $props();
 
+	const SLOW_SPAN_THRESHOLD_NS = 3_000_000_000;
+
 	// Build tree structure from flat span list
 	interface SpanNode {
 		span: Span;
@@ -242,6 +244,7 @@
 			{@const offsetPercent = ((spanStart - traceBounds.start) / traceBounds.duration) * 100}
 			{@const widthPercent = (row.span.duration_ns / 1_000_000 / traceBounds.duration) * 100}
 			{@const isError = row.span.status_code === 2}
+			{@const isSlow = row.span.duration_ns >= SLOW_SPAN_THRESHOLD_NS}
 			{@const isSelected = row.span.span_id === selectedSpanId}
 
 				<div
@@ -286,7 +289,7 @@
 					</div>
 
 					<!-- Span name -->
-					<span class="truncate text-xs font-medium {isError ? 'text-red-500' : ''}">
+					<span class="truncate text-xs font-medium {isError || isSlow ? 'text-red-500' : ''}">
 						{row.span.name}
 					</span>
 				</div>
@@ -296,8 +299,8 @@
 					<SpanBar
 						{offsetPercent}
 						{widthPercent}
-						color={getServiceColor(row.span.service_name)}
-						{isError}
+						color={isError || isSlow ? 'bg-red-500' : getServiceColor(row.span.service_name)}
+						isError={isError || isSlow}
 						{isSelected}
 						label={formatDuration(row.span.duration_ns)}
 					/>

@@ -1,6 +1,7 @@
 package ingest
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -218,6 +219,29 @@ func unmarshalOTLPJSON(body []byte, msg proto.Message) error {
 	return options.Unmarshal(body, msg)
 }
 
+func readOTLPBody(r *http.Request) ([]byte, error) {
+	reader := io.Reader(r.Body)
+
+	for _, encoding := range strings.Split(strings.ToLower(r.Header.Get("Content-Encoding")), ",") {
+		encoding = strings.TrimSpace(encoding)
+		switch encoding {
+		case "", "identity":
+			continue
+		case "gzip":
+			gzipReader, err := gzip.NewReader(reader)
+			if err != nil {
+				return nil, fmt.Errorf("create gzip reader: %w", err)
+			}
+			defer gzipReader.Close()
+			reader = gzipReader
+		default:
+			return nil, fmt.Errorf("unsupported content encoding: %s", encoding)
+		}
+	}
+
+	return io.ReadAll(reader)
+}
+
 // --- gRPC Log handler ---
 
 type grpcLogHandler struct {
@@ -288,7 +312,7 @@ func (h *httpLogHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := readOTLPBody(r)
 	if err != nil {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return
@@ -358,7 +382,7 @@ func (h *httpTraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := readOTLPBody(r)
 	if err != nil {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return
@@ -452,7 +476,7 @@ func (h *httpMetricHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := readOTLPBody(r)
 	if err != nil {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return

@@ -46,6 +46,7 @@ func (s *service) GetMetricSummary(ctx context.Context, input GetMetricSummaryIn
 			m.metric_name,
 			m.service_name,
 			m.time,
+			m.resource_attributes,
 			m.attributes,
 			coalesce(m.value_double, m.value_int::double precision, 0) AS metric_value
 		FROM metrics_hot m
@@ -59,6 +60,7 @@ func (s *service) GetMetricSummary(ctx context.Context, input GetMetricSummaryIn
 			r.metric_name,
 			r.service_name,
 			r.time,
+			r.resource_attributes,
 			r.attributes,
 			coalesce(r.value_double, r.value_int::double precision, 0) AS metric_value
 		FROM metrics_restored r
@@ -104,7 +106,7 @@ func buildSummaryWhere(alias string, input GetMetricSummaryInput, since time.Tim
 	}
 	sort.Strings(filterKeys)
 	for _, key := range filterKeys {
-		clauses = append(clauses, fmt.Sprintf("%sattributes->>'%s' = %s", prefix, key, args.add(input.Filters[key])))
+		clauses = append(clauses, fmt.Sprintf("%s = %s", jsonAttributeExpr(prefix, key), args.add(input.Filters[key])))
 	}
 
 	return strings.Join(clauses, " AND ")

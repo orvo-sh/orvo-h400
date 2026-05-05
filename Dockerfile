@@ -32,15 +32,17 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/orvo ./
 FROM alpine:3.21
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates \
+RUN apk add --no-cache ca-certificates docker-cli wget \
 	&& addgroup -S app \
 	&& adduser -S -G app app
 
 COPY --from=builder /out/orvo ./orvo
 COPY --from=builder /out/goose /usr/local/bin/goose
 COPY --from=builder /src/internal/infra/postgres/migrations ./migrations/postgres
+COPY --from=builder /src/frontend/build ./frontend/build
 COPY scripts/migrate.sh ./migrate.sh
-RUN chmod +x /app/migrate.sh && chown -R app:app /app
+COPY scripts/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x /app/migrate.sh /app/docker-entrypoint.sh && chown -R app:app /app
 
 ENV APP_ENVIRONMENT=production
 ENV APP_APP_PORT=8080
@@ -48,4 +50,4 @@ ENV APP_APP_PORT=8080
 EXPOSE 8080 4317 4318
 
 USER app
-ENTRYPOINT ["./orvo"]
+ENTRYPOINT ["./docker-entrypoint.sh"]

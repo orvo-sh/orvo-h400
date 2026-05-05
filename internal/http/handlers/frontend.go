@@ -3,6 +3,8 @@ package handlers
 import (
 	"io/fs"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -12,9 +14,12 @@ import (
 
 func FrontendHandler(r chi.Router) {
 	static := http.FileSystem(http.FS(util.Must(fs.Sub(frontend.Efs, "build"))))
+	if _, err := os.Stat("/app/frontend/build"); err == nil {
+		static = http.Dir("/app/frontend/build")
+	}
 
 	r.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
+		path := strings.TrimPrefix(r.URL.Path, "/")
 		f, err := static.Open(path)
 		if err == nil {
 			f.Close()

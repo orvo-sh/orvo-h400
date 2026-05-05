@@ -2,7 +2,7 @@
 	import GalleryVerticalEndIcon from '@lucide/svelte/icons/gallery-vertical-end';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 
-	import { IconLogs, IconRoute, IconChartLine, IconLayoutDashboard } from '@tabler/icons-svelte';
+	import { IconLogs, IconRoute, IconChartLine, IconLayoutDashboard, IconCpu, IconServer } from '@tabler/icons-svelte';
 </script>
 
 <script lang="ts">
@@ -98,6 +98,22 @@
 				isActive: page.url.pathname.includes('/dashboards'),
 				items: [
 					{ title: 'All Dashboards', url: '/dashboards' }
+				]
+			},
+			{
+				title: 'Hosts',
+				url: '/hosts',
+				icon: IconServer,
+				isActive: page.url.pathname.includes('/hosts'),
+				items: [{ title: 'Infrastructure', url: '/hosts' }]
+			},
+			{
+				title: 'Sandboxes',
+				url: '/sandboxes',
+				icon: IconCpu,
+				isActive: page.url.pathname.includes('/sandboxes'),
+				items: [
+					{ title: 'Running Jobs', url: '/sandboxes' }
 				]
 			},
 				{

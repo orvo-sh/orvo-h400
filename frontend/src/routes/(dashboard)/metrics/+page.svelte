@@ -11,7 +11,8 @@
 	import MetricCatalogList from './_components/metric-catalog-list.svelte';
 	import {
 		createGetMetricCatalog,
-		createQueryTimeseries
+		createQueryTimeseries,
+		recalculateDerivedMetrics
 	} from '$lib/api/endpoints/metrics/metrics';
 	import { sessionStore } from '$lib/stores/session';
 	import type { MetricMeta, Timeseries } from '$lib/api/model';
@@ -23,6 +24,8 @@
 	let selectedAggregation = $state('avg');
 	let selectedStep = $state('');
 	let groupBy = $state('');
+	let recalculating = $state(false);
+	let recalcStatus = $state('');
 
 	const orgId = $derived($sessionStore?.active_organization?.id ?? '');
 
@@ -65,6 +68,29 @@
 		const range = computeTimeRange(selectedTimeRange);
 		queryStart = range.start;
 		queryEnd = range.end;
+	}
+
+	function rangeToLookback(range: string): string {
+		switch (range) {
+			case '15m':
+				return '15m';
+			case '30m':
+				return '30m';
+			case '1h':
+				return '1h';
+			case '3h':
+				return '3h';
+			case '6h':
+				return '6h';
+			case '12h':
+				return '12h';
+			case '24h':
+				return '24h';
+			case '7d':
+				return '168h';
+			default:
+				return '1h';
+		}
 	}
 
 	$effect(() => {
@@ -120,6 +146,41 @@
 		selectedMetric = name;
 		refreshQueries();
 	}
+
+	async function refreshAll() {
+		refreshQueries();
+		await catalogQuery.refetch();
+		if (selectedMetric) {
+			await timeseriesQuery.refetch();
+		}
+	}
+
+	async function recalculateDerivedNow() {
+		if (!orgId || recalculating) {
+			return;
+		}
+
+		recalculating = true;
+		recalcStatus = '';
+		try {
+			const response = await recalculateDerivedMetrics(orgId, {
+				service: selectedService || undefined,
+				lookback: rangeToLookback(selectedTimeRange)
+			});
+			await refreshAll();
+
+			if (response.status === 200) {
+				const asOf = response.data.as_of ? new Date(response.data.as_of).toLocaleTimeString() : 'now';
+				recalcStatus = `Derived metrics recalculated (as of ${asOf})`;
+			} else {
+				recalcStatus = 'Derived metrics recalculation failed';
+			}
+		} catch {
+			recalcStatus = 'Derived metrics recalculation failed';
+		} finally {
+			recalculating = false;
+		}
+	}
 </script>
 
 <PageContainer breadcrumbs={[{ title: 'Metrics', href: '/metrics' }, { title: 'Explorer' }]}>
@@ -135,11 +196,21 @@
 					<p class="text-sm text-muted-foreground">Browse, query, and visualize your metrics</p>
 				</div>
 			</div>
-			<Button onclick={refreshQueries}>
-				<RefreshCwIcon class="mr-2 size-4" />
-				Refresh
-			</Button>
+			<div class="flex items-center gap-2">
+				<Button variant="outline" onclick={recalculateDerivedNow} disabled={recalculating || !orgId}>
+					<RefreshCwIcon class="mr-2 size-4 {recalculating ? 'animate-spin' : ''}" />
+					Recalculate Derived
+				</Button>
+				<Button onclick={refreshAll}>
+					<RefreshCwIcon class="mr-2 size-4" />
+					Refresh
+				</Button>
+			</div>
 		</div>
+
+		{#if recalcStatus}
+			<p class="text-xs text-muted-foreground">{recalcStatus}</p>
+		{/if}
 
 		<Separator />
 

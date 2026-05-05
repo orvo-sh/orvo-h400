@@ -64,6 +64,7 @@ type WorkerCronConfig struct {
 	RestoreTTL         string `env:"CRON_RESTORE_TTL" envDefault:"*/30 * * * *"`
 	RestoreQueuePoll   string `env:"CRON_RESTORE_QUEUE_POLL" envDefault:"*/1 * * * *"`
 	SandboxQueuePoll   string `env:"CRON_SANDBOX_QUEUE_POLL" envDefault:"*/1 * * * *"`
+	AutoResolvePoll    string `env:"CRON_AUTO_RESOLVE_THRESHOLD_POLL" envDefault:"*/1 * * * *"`
 }
 
 type S3ArchiveConfig struct {
@@ -103,8 +104,10 @@ type SandboxConfig struct {
 	GitAuthorEmail      string        `env:"GIT_AUTHOR_EMAIL" envDefault:"orvo-bot@users.noreply.github.com"`
 	OpencodeCommand     string        `env:"OPENCODE_COMMAND" envDefault:"opencode"`
 	OpencodeModel       string        `env:"OPENCODE_MODEL"`
+	OpencodeVariant     string        `env:"OPENCODE_VARIANT"`
 	OpencodeAgent       string        `env:"OPENCODE_AGENT"`
 	OpencodeTimeout     time.Duration `env:"OPENCODE_TIMEOUT" envDefault:"8m"`
+	AutoResolveFastPath bool          `env:"AUTO_RESOLVE_FAST_PATH" envDefault:"false"`
 	ImagePrepullEnabled bool          `env:"IMAGE_PREPULL_ENABLED" envDefault:"true"`
 	ImagePrepullTimeout time.Duration `env:"IMAGE_PREPULL_TIMEOUT" envDefault:"120s"`
 }

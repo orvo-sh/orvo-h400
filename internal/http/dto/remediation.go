@@ -36,6 +36,51 @@ type DeleteServiceRemediationMappingInput struct {
 	ServiceName    string `path:"service_name"`
 }
 
+type ListAutoResolveThresholdsInput struct {
+	OrganizationID string `path:"organization_id"`
+}
+
+type AutoResolveThreshold struct {
+	ID              string  `json:"id"`
+	ServiceName     string  `json:"service_name"`
+	MetricName      string  `json:"metric_name"`
+	ThresholdValue  float64 `json:"threshold_value"`
+	LookbackWindow  string  `json:"lookback_window"`
+	Cooldown        string  `json:"cooldown"`
+	Quorum          int     `json:"quorum"`
+	Enabled         bool    `json:"enabled"`
+	LastTriggeredAt string  `json:"last_triggered_at,omitempty"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
+}
+
+type ListAutoResolveThresholdsOutput struct {
+	Body struct {
+		Thresholds []AutoResolveThreshold `json:"thresholds"`
+	}
+}
+
+type UpsertAutoResolveThresholdInput struct {
+	OrganizationID string `path:"organization_id"`
+	ServiceName    string `path:"service_name"`
+	Body           struct {
+		ThresholdValue float64 `json:"threshold_value"`
+		LookbackWindow string  `json:"lookback_window"`
+		Cooldown       string  `json:"cooldown"`
+		Quorum         int     `json:"quorum"`
+		Enabled        bool    `json:"enabled"`
+	}
+}
+
+type UpsertAutoResolveThresholdOutput struct {
+	Body AutoResolveThreshold
+}
+
+type DeleteAutoResolveThresholdInput struct {
+	OrganizationID string `path:"organization_id"`
+	ServiceName    string `path:"service_name"`
+}
+
 type GetLogAutoResolvePreviewInput struct {
 	OrganizationID string `path:"organization_id"`
 	LogID          string `path:"log_id"`

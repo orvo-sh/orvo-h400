@@ -67,6 +67,12 @@ components:
           $ref: "#/components/schemas/AutoResolveContextSummary"
         log_id:
           type: string
+        related_repositories:
+          items:
+            $ref: "#/components/schemas/AutoResolveRepositoryContext"
+          type:
+            - array
+            - "null"
         repository_full_name:
           type: string
         repository_id:
@@ -91,6 +97,77 @@ components:
         - commit_message
         - validation_commands
         - context_summary
+        - related_repositories
+      type: object
+    AutoResolveRepositoryContext:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AutoResolveRepositoryContext.json
+          format: uri
+          readOnly: true
+          type: string
+        reason:
+          type: string
+        repository_full_name:
+          type: string
+        repository_id:
+          type: string
+        service_name:
+          type: string
+      required:
+        - service_name
+        - repository_id
+        - repository_full_name
+        - reason
+      type: object
+    AutoResolveThreshold:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/AutoResolveThreshold.json
+          format: uri
+          readOnly: true
+          type: string
+        cooldown:
+          type: string
+        created_at:
+          type: string
+        enabled:
+          type: boolean
+        id:
+          type: string
+        last_triggered_at:
+          type: string
+        lookback_window:
+          type: string
+        metric_name:
+          type: string
+        quorum:
+          format: int64
+          type: integer
+        service_name:
+          type: string
+        threshold_value:
+          format: double
+          type: number
+        updated_at:
+          type: string
+      required:
+        - id
+        - service_name
+        - metric_name
+        - threshold_value
+        - lookback_window
+        - cooldown
+        - quorum
+        - enabled
+        - created_at
+        - updated_at
       type: object
     CreateApiKeyInputBody:
       additionalProperties: false
@@ -837,6 +914,25 @@ components:
       required:
         - api_keys
       type: object
+    ListAutoResolveThresholdsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListAutoResolveThresholdsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        thresholds:
+          items:
+            $ref: "#/components/schemas/AutoResolveThreshold"
+          type:
+            - array
+            - "null"
+      required:
+        - thresholds
+      type: object
     ListDashboardsOutputBody:
       additionalProperties: false
       properties:
@@ -1207,6 +1303,48 @@ components:
         - p90_latency
         - p95_latency
         - p99_latency
+      type: object
+    RecalculateDerivedMetricsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RecalculateDerivedMetricsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        as_of:
+          type: string
+        combined_error_events:
+          format: int64
+          type: integer
+        error_log_count:
+          format: int64
+          type: integer
+        error_span_count:
+          format: int64
+          type: integer
+        organization_id:
+          type: string
+        request_span_count:
+          format: int64
+          type: integer
+        service_name:
+          type: string
+        window_end:
+          type: string
+        window_start:
+          type: string
+      required:
+        - organization_id
+        - window_start
+        - window_end
+        - as_of
+        - request_span_count
+        - error_span_count
+        - error_log_count
+        - combined_error_events
       type: object
     RegisterInputBody:
       additionalProperties: false
@@ -1845,6 +1983,35 @@ components:
             - "null"
       required:
         - name
+      type: object
+    UpsertAutoResolveThresholdInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpsertAutoResolveThresholdInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        cooldown:
+          type: string
+        enabled:
+          type: boolean
+        lookback_window:
+          type: string
+        quorum:
+          format: int64
+          type: integer
+        threshold_value:
+          format: double
+          type: number
+      required:
+        - threshold_value
+        - lookback_window
+        - cooldown
+        - quorum
+        - enabled
       type: object
     UpsertServiceRemediationMappingInputBody:
       additionalProperties: false
@@ -2687,6 +2854,44 @@ paths:
           description: Error
       tags:
         - metrics
+  /organizations/{organization_id}/metrics/derived/recalculate:
+    post:
+      operationId: recalculate-derived-metrics
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+        - description: Filter by service name
+          explode: false
+          in: query
+          name: service
+          schema:
+            description: Filter by service name
+            type: string
+        - description: Lookback window to recalculate (e.g. 15m, 1h, 24h). Defaults to 1h.
+          explode: false
+          in: query
+          name: lookback
+          schema:
+            description: Lookback window to recalculate (e.g. 15m, 1h, 24h). Defaults to 1h.
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecalculateDerivedMetricsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - metrics
   /organizations/{organization_id}/metrics/red:
     get:
       operationId: get-red-metrics
@@ -2881,6 +3086,89 @@ paths:
           description: Error
       tags:
         - metrics
+  /organizations/{organization_id}/remediation/auto-resolve-thresholds:
+    get:
+      operationId: list-auto-resolve-thresholds
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListAutoResolveThresholdsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - remediation
+  /organizations/{organization_id}/remediation/auto-resolve-thresholds/{service_name}:
+    delete:
+      operationId: delete-auto-resolve-threshold
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: service_name
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - remediation
+    put:
+      operationId: upsert-auto-resolve-threshold
+      parameters:
+        - in: path
+          name: organization_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: service_name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertAutoResolveThresholdInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoResolveThreshold"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      tags:
+        - remediation
   /organizations/{organization_id}/remediation/service-mappings:
     get:
       operationId: list-service-remediation-mappings
@@ -3320,4 +3608,3 @@ paths:
         - traces
 servers:
   - url: /api/v1
-

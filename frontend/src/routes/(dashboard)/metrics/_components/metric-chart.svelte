@@ -13,7 +13,7 @@
 
 	// Chart colors for multiple series
 	const colors = [
-		'var(--color-primary)',
+		'#2563eb',
 		'#10b981',
 		'#f59e0b',
 		'#ef4444',
@@ -247,9 +247,20 @@
 						d={pathForSeries(s.points)}
 						fill="none"
 						stroke={s.color}
-						stroke-width="1.5"
+						stroke-width="2"
+						stroke-linecap="round"
 						stroke-linejoin="round"
 					/>
+					{#if s.points.length <= 1}
+						{#each s.points as p}
+							<circle
+								cx={xScale(p.time)}
+								cy={yScale(p.value)}
+								r="3"
+								fill={s.color}
+							/>
+						{/each}
+					{/if}
 				{/each}
 			</svg>
 

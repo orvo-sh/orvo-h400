@@ -67,8 +67,10 @@ func (s *service) QueryTimeseries(ctx context.Context, input QueryTimeseriesInpu
 		if key == "" {
 			continue
 		}
-		labelSelect += fmt.Sprintf(", coalesce(u.attributes->>'%s', '') AS \"%s\"", key, key)
-		labelGroupBy += fmt.Sprintf(", \"%s\"", key)
+		jsonKey := quoteSQLLiteral(key)
+		identifier := quoteSQLIdentifier(key)
+		labelSelect += fmt.Sprintf(", coalesce(u.attributes->>%s, u.resource_attributes->>%s, '') AS %s", jsonKey, jsonKey, identifier)
+		labelGroupBy += fmt.Sprintf(", %s", identifier)
 		labelScanKeys = append(labelScanKeys, key)
 	}
 
@@ -79,6 +81,7 @@ func (s *service) QueryTimeseries(ctx context.Context, input QueryTimeseriesInpu
 			m.metric_name,
 			m.service_name,
 			m.time,
+			m.resource_attributes,
 			m.attributes,
 			%s AS metric_value
 		FROM metrics_hot m
@@ -92,6 +95,7 @@ func (s *service) QueryTimeseries(ctx context.Context, input QueryTimeseriesInpu
 			r.metric_name,
 			r.service_name,
 			r.time,
+			r.resource_attributes,
 			r.attributes,
 			%s AS metric_value
 		FROM metrics_restored r
@@ -207,7 +211,7 @@ func buildMetricWhere(alias string, input QueryTimeseriesInput, args *metricSQLB
 	}
 	sort.Strings(filterKeys)
 	for _, key := range filterKeys {
-		clauses = append(clauses, fmt.Sprintf("%sattributes->>'%s' = %s", prefix, key, args.add(input.Filters[key])))
+		clauses = append(clauses, fmt.Sprintf("%s = %s", jsonAttributeExpr(prefix, key), args.add(input.Filters[key])))
 	}
 
 	return strings.Join(clauses, " AND ")
@@ -289,6 +293,10 @@ func percentileQuantile(agg string) string {
 
 func stepSeconds(step string) int {
 	switch step {
+	case "10s":
+		return 10
+	case "30s":
+		return 30
 	case "1m":
 		return 60
 	case "5m":
@@ -308,4 +316,17 @@ func stepSeconds(step string) int {
 	default:
 		return 60
 	}
+}
+
+func jsonAttributeExpr(prefix string, key string) string {
+	quotedKey := quoteSQLLiteral(key)
+	return fmt.Sprintf("coalesce(%sattributes->>%s, %sresource_attributes->>%s)", prefix, quotedKey, prefix, quotedKey)
+}
+
+func quoteSQLLiteral(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func quoteSQLIdentifier(value string) string {
+	return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
 }

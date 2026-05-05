@@ -15,6 +15,8 @@
 		onClose?: () => void;
 	} = $props();
 
+	const SLOW_SPAN_THRESHOLD_NS = 3_000_000_000;
+
 	function formatTimestamp(iso: string): string {
 		const date = new Date(iso);
 		return date.toLocaleString('en-US', {
@@ -98,6 +100,7 @@
 
 	const events = $derived(span.events ?? []);
 	const links = $derived(span.links ?? []);
+	const isSlow = $derived(span.duration_ns >= SLOW_SPAN_THRESHOLD_NS);
 
 	// Build "Go to related logs" link
 	const relatedLogsUrl = $derived.by(() => {
@@ -148,7 +151,9 @@
 				<div class="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
 					Duration
 				</div>
-				<div class="text-sm font-semibold">{formatDuration(span.duration_ns)}</div>
+				<div class="text-sm font-semibold {isSlow ? 'text-red-500' : ''}">
+					{formatDuration(span.duration_ns)}
+				</div>
 			</div>
 
 			<div>
@@ -181,6 +186,12 @@
 				</Badge>
 			</div>
 		</div>
+
+		{#if isSlow}
+			<div>
+				<Badge variant="destructive">This request took too long</Badge>
+			</div>
+		{/if}
 
 		{#if span.status_message}
 			<div>

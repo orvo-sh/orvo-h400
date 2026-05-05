@@ -396,12 +396,17 @@
 			case 'text': {
 				const text = typeof part.text === 'string' ? compactWhitespace(part.text) : '';
 				if (!text) return null;
+				const looksLikeSummary =
+					text.startsWith('Fixed.') ||
+					text.startsWith('The fix') ||
+					text.startsWith('Changes:') ||
+					text.startsWith('The issue is');
 				return {
 					seq: log.seq,
 					createdAt: log.created_at,
-					title: 'Opencode note',
+					title: looksLikeSummary ? 'Opencode summary' : 'Opencode note',
 					detail: truncateText(text, 300),
-					level: 'info',
+					level: looksLikeSummary ? 'success' : 'info',
 					source: 'opencode'
 				};
 			}
@@ -467,9 +472,10 @@
 			const commandNum = commandMatch[1];
 			const isStart = message.includes(' started:');
 			const titleMap: Record<string, string> = {
-				'1': 'Prepare opencode runtime',
-				'2': 'Run opencode remediation',
-				'3': 'Run validation checks'
+				'1': 'Ensure opencode is available',
+				'2': 'Lock package managers',
+				'3': 'Run opencode remediation',
+				'4': 'Run validation checks'
 			};
 			const title = titleMap[commandNum] ?? `Run command #${commandNum}`;
 			if (isStart) {
@@ -798,13 +804,22 @@
 						<div><span class="text-muted-foreground">Service:</span> {autoResolvePreview.service_name}</div>
 						<div><span class="text-muted-foreground">Log ID:</span> {autoResolvePreview.log_id}</div>
 						<div>
-							<span class="text-muted-foreground">Repository:</span>
+							<span class="text-muted-foreground">Primary PR Repo:</span>
 							{autoResolvePreview.repository_full_name}
 						</div>
 						<div>
 							<span class="text-muted-foreground">Base Branch:</span>
 							{autoResolvePreview.base_branch}
 						</div>
+						{#if autoResolvePreview.related_repositories && autoResolvePreview.related_repositories.length > 0}
+							<div class="md:col-span-2">
+								<span class="text-muted-foreground">Related Repos:</span>
+								{#each autoResolvePreview.related_repositories as repo, index (repo.repository_id)}
+									{#if index > 0}, {/if}
+									{repo.repository_full_name} ({repo.service_name})
+								{/each}
+							</div>
+						{/if}
 						<div class="md:col-span-2">
 							<span class="text-muted-foreground">Task Title:</span>
 							{autoResolvePreview.task_title}

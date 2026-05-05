@@ -91,7 +91,7 @@ export const getCreateGithubInstallUrlUrl = (organizationId: string,) => {
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/github/install-url`
+  return `/api/v1/organizations/${organizationId}/github/install-url`
 }
 
 export const createGithubInstallUrl = async (organizationId: string, options?: RequestInit): Promise<createGithubInstallUrlResponse> => {
@@ -180,7 +180,7 @@ export const getListGithubInstallationsUrl = (organizationId: string,) => {
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/github/installations`
+  return `/api/v1/organizations/${organizationId}/github/installations`
 }
 
 export const listGithubInstallations = async (organizationId: string, options?: RequestInit): Promise<listGithubInstallationsResponse> => {
@@ -207,7 +207,7 @@ export const listGithubInstallations = async (organizationId: string, options?: 
 
 export const getListGithubInstallationsQueryKey = (organizationId: string,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/github/installations`
+    `/api/v1/organizations/${organizationId}/github/installations`
     ] as const;
     }
 
@@ -274,7 +274,7 @@ export const getListGithubRepositoriesUrl = (organizationId: string,) => {
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/github/repositories`
+  return `/api/v1/organizations/${organizationId}/github/repositories`
 }
 
 export const listGithubRepositories = async (organizationId: string, options?: RequestInit): Promise<listGithubRepositoriesResponse> => {
@@ -301,7 +301,7 @@ export const listGithubRepositories = async (organizationId: string, options?: R
 
 export const getListGithubRepositoriesQueryKey = (organizationId: string,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/github/repositories`
+    `/api/v1/organizations/${organizationId}/github/repositories`
     ] as const;
     }
 
@@ -369,7 +369,7 @@ export const getSetGithubRepositoryEnabledUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/github/repositories/${repositoryId}`
+  return `/api/v1/organizations/${organizationId}/github/repositories/${repositoryId}`
 }
 
 export const setGithubRepositoryEnabled = async (organizationId: string,

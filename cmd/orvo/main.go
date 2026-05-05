@@ -177,6 +177,7 @@ func main() {
 		MemoryLimit:      cfg.Sandbox.MemoryLimit,
 		JobTimeout:       cfg.Sandbox.JobTimeout,
 		CommandTimeout:   cfg.Sandbox.CommandTimeout,
+		OpencodeTimeout:  cfg.Sandbox.OpencodeTimeout,
 		BootstrapTimeout: cfg.Sandbox.BootstrapTimeout,
 		GitAuthorName:    cfg.Sandbox.GitAuthorName,
 		GitAuthorEmail:   cfg.Sandbox.GitAuthorEmail,
@@ -185,13 +186,22 @@ func main() {
 		pg,
 		appLogger,
 		githubSvc,
+		metricSvc,
 		traceSvc,
 		sandboxManager,
 		remediationservice.Config{
 			OpencodeCommand: cfg.Sandbox.OpencodeCommand,
 			OpencodeModel:   cfg.Sandbox.OpencodeModel,
+			OpencodeVariant: cfg.Sandbox.OpencodeVariant,
 			OpencodeAgent:   cfg.Sandbox.OpencodeAgent,
-			OpencodeTimeout: cfg.Sandbox.OpencodeTimeout,
+			ValidationCommands: func() []string {
+				if !cfg.Sandbox.AutoResolveFastPath {
+					return nil
+				}
+				return []string{
+					"git diff --check && git status --short",
+				}
+			}(),
 		},
 	)
 
@@ -201,7 +211,7 @@ func main() {
 	})
 
 	if cfg.App.EnableWorkers {
-		registerWorkers(workerManager, partitionManager, archiveManager, restoreManager, sandboxManager, cfg)
+		registerWorkers(workerManager, partitionManager, archiveManager, restoreManager, sandboxManager, remediationSvc, cfg)
 		workerManager.Start()
 		restoreManager.Notify()
 		sandboxManager.Notify()
@@ -230,6 +240,9 @@ func main() {
 	})
 
 	handlers.FrontendHandler(router)
+	githubHandler := handlers.NewGithubHandler(authService, githubSvc)
+	sessionCookieSecure := strings.EqualFold(cfg.App.Environment, "production")
+
 	router.With(
 		cors.Handler(cors.Options{
 			AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
@@ -240,9 +253,7 @@ func main() {
 			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		})).
 		Route("/api/v1", func(r chi.Router) {
-			r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-				w.Write([]byte("OK"))
-			})
+			handlers.RegisterHealthRoutes(r, pg, cfg.Sandbox.DockerBinary)
 
 			humaConfig := huma.DefaultConfig("orvo", "1.0.0")
 			humaConfig.Servers = []*huma.Server{
@@ -258,7 +269,7 @@ func main() {
 			handlers.NewAuthHandler(authService, handlers.NewAuthConfig{
 				SessionCookieKey:       "orvo_sess",
 				SessionCookieDomain:    "",
-				SessionCookieSecure:    false,
+				SessionCookieSecure:    sessionCookieSecure,
 				SessionCookieSameSite:  http.SameSiteLaxMode,
 				SessionCookieExpiresIn: 7 * 24 * time.Hour,
 			}).RegisterRoutes(api)
@@ -269,7 +280,6 @@ func main() {
 			handlers.NewMetricHandler(metricSvc, authService).RegisterRoutes(api)
 			handlers.NewDashboardHandler(dashboardSvc, authService).RegisterRoutes(api)
 			handlers.NewArchiveHandler(authService, restoreManager).RegisterRoutes(api)
-			githubHandler := handlers.NewGithubHandler(authService, githubSvc)
 			githubHandler.RegisterRoutes(api)
 			githubHandler.RegisterRawRoutes(r)
 			handlers.NewSandboxHandler(authService, sandboxManager).RegisterRoutes(api)
@@ -279,6 +289,10 @@ func main() {
 				w.WriteHeader(http.StatusNotFound)
 			})
 		})
+
+	router.Route("/api/vi", func(r chi.Router) {
+		githubHandler.RegisterRawRoutes(r)
+	})
 
 	if !cfg.App.EnableAPI {
 		appLogger.Info("API listener disabled; background workers and ingest listeners are running")
@@ -319,6 +333,7 @@ func registerWorkers(
 	archiveManager *workers.ArchiveManager,
 	restoreManager *workers.RestoreManager,
 	sandboxManager *workers.SandboxManager,
+	remediationService remediationservice.Service,
 	cfg *config.Config,
 ) {
 	must := func(err error) {
@@ -367,4 +382,8 @@ func registerWorkers(
 	manager.RegisterChannel("sandbox-processor", sandboxManager.TriggerChan(), func(ctx context.Context) error {
 		return sandboxManager.ProcessQueued(ctx)
 	}, sandboxWorkerTimeout)
+
+	must(manager.RegisterCron("auto-resolve-threshold-poller", cfg.Workers.AutoResolvePoll, func(ctx context.Context) error {
+		return remediationService.ProcessAutoResolveThresholds(ctx)
+	}, 2*time.Minute))
 }

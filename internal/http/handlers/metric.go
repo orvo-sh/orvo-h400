@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/orvo-sh/orvo/internal/domain/errs"
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/metricservice"
 	"github.com/orvo-sh/orvo/internal/http/dto"
@@ -59,6 +60,14 @@ func (h *MetricHandler) RegisterRoutes(api huma.API) {
 		Tags:        []string{"metrics"},
 		Middlewares: huma.Middlewares{authMiddleware},
 	}, h.getMetricSummary)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "recalculate-derived-metrics",
+		Method:      http.MethodPost,
+		Path:        "/organizations/{organization_id}/metrics/derived/recalculate",
+		Tags:        []string{"metrics"},
+		Middlewares: huma.Middlewares{authMiddleware},
+	}, h.recalculateDerivedMetrics)
 }
 
 func (h *MetricHandler) getMetricCatalog(ctx context.Context, input *dto.GetMetricCatalogInput) (*dto.GetMetricCatalogOutput, error) {
@@ -157,9 +166,11 @@ func (h *MetricHandler) getMetricSummary(ctx context.Context, input *dto.GetMetr
 	}
 
 	if input.Lookback != "" {
-		if d, err := time.ParseDuration(input.Lookback); err == nil {
-			svcInput.LookbackWindow = d
+		d, err := time.ParseDuration(input.Lookback)
+		if err != nil {
+			return nil, errs.ErrBadRequest
 		}
+		svcInput.LookbackWindow = d
 	}
 
 	if input.Filters != "" {
@@ -174,6 +185,39 @@ func (h *MetricHandler) getMetricSummary(ctx context.Context, input *dto.GetMetr
 	out := &dto.GetMetricSummaryOutput{}
 	out.Body.Value = result.Value
 	out.Body.Timestamp = result.Timestamp.Format(time.RFC3339)
+	return out, nil
+}
+
+func (h *MetricHandler) recalculateDerivedMetrics(ctx context.Context, input *dto.RecalculateDerivedMetricsInput) (*dto.RecalculateDerivedMetricsOutput, error) {
+	svcInput := metricservice.RecalculateDerivedMetricsInput{
+		OrganizationID: input.OrganizationID,
+		ServiceName:    input.Service,
+	}
+
+	if input.Lookback != "" {
+		d, err := time.ParseDuration(input.Lookback)
+		if err != nil {
+			return nil, errs.ErrBadRequest
+		}
+		svcInput.LookbackWindow = d
+	}
+
+	result, err := h.metricService.RecalculateDerivedMetrics(ctx, svcInput)
+	if err != nil {
+		return nil, err
+	}
+
+	out := &dto.RecalculateDerivedMetricsOutput{}
+	out.Body.OrganizationID = result.OrganizationID
+	out.Body.ServiceName = result.ServiceName
+	out.Body.WindowStart = result.WindowStart.Format(time.RFC3339)
+	out.Body.WindowEnd = result.WindowEnd.Format(time.RFC3339)
+	out.Body.AsOf = result.AsOf.Format(time.RFC3339)
+	out.Body.RequestSpanCount = result.RequestSpanCount
+	out.Body.ErrorSpanCount = result.ErrorSpanCount
+	out.Body.ErrorLogCount = result.ErrorLogCount
+	out.Body.CombinedErrorEvents = result.CombinedErrorEvents
+
 	return out, nil
 }
 

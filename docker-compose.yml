@@ -1,0 +1,138 @@
+name: orvo
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: orvo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-orvo}
+      POSTGRES_USER: ${POSTGRES_USER:-orvo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-orvo} -d ${POSTGRES_DB:-orvo} -h 127.0.0.1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - orvo-internal
+
+  sandbox-image:
+    profiles: ["build-only"]
+    image: ${SANDBOX_DEFAULT_IMAGE:-orvo-opencode-sandbox:local}
+    build:
+      context: .
+      dockerfile: docker/opencode-sandbox.Dockerfile
+
+  orvo:
+    container_name: orvo-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      APP_APP_PORT: "8080"
+      APP_OTLP_GRPC_PORT: "4317"
+      APP_OTLP_HTTP_PORT: "4318"
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-orvo}:${POSTGRES_PASSWORD}@orvo-postgres:5432/${POSTGRES_DB:-orvo}?sslmode=disable
+      SANDBOX_DOCKER_BINARY: docker
+      SANDBOX_DEFAULT_IMAGE: ${SANDBOX_DEFAULT_IMAGE:-orvo-opencode-sandbox:local}
+    group_add:
+      - "${DOCKER_GID:-998}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O- http://127.0.0.1:8080/api/v1/health/ready >/dev/null 2>&1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+    ports:
+      - "${ORVO_HTTP_BIND_ADDRESS:-0.0.0.0}:${ORVO_HTTP_PORT:-80}:8080"
+      - "${OTLP_GRPC_BIND_ADDRESS:-0.0.0.0}:${OTLP_GRPC_PUBLIC_PORT:-4317}:4317"
+      - "${OTLP_HTTP_BIND_ADDRESS:-0.0.0.0}:${OTLP_HTTP_PUBLIC_PORT:-4318}:4318"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./runtime:/app/runtime:ro
+    networks:
+      - orvo-internal
+      - orvo-public
+
+  otel-collector:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.150.1
+    container_name: orvo-otel-collector
+    depends_on:
+      postgres:
+        condition: service_healthy
+      orvo:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - .env.production
+      - runtime/collector.env
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "--version"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    volumes:
+      - ./docker/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /:/hostfs:ro
+    networks:
+      - orvo-internal
+
+  caddy:
+    image: caddy:2.10-alpine
+    container_name: orvo-caddy
+    depends_on:
+      orvo:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    ports:
+      - "${CADDY_HTTP_BIND_ADDRESS:-0.0.0.0}:${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_BIND_ADDRESS:-0.0.0.0}:${CADDY_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - orvo-public
+
+networks:
+  orvo-internal:
+    name: orvo-internal
+  orvo-public:
+    name: orvo-public
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

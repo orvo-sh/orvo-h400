@@ -91,7 +91,7 @@ export const getLoginUrl = () => {
 
   
 
-  return `http://localhost:8080/api/v1/auth/login`
+  return `/api/v1/auth/login`
 }
 
 export const login = async (loginInputBody: NonReadonly<LoginInputBody>, options?: RequestInit): Promise<loginResponse> => {
@@ -181,7 +181,7 @@ export const getLogoutUrl = () => {
 
   
 
-  return `http://localhost:8080/api/v1/auth/logout`
+  return `/api/v1/auth/logout`
 }
 
 export const logout = async ( options?: RequestInit): Promise<logoutResponse> => {
@@ -270,7 +270,7 @@ export const getRegisterUrl = () => {
 
   
 
-  return `http://localhost:8080/api/v1/auth/register`
+  return `/api/v1/auth/register`
 }
 
 export const register = async (registerInputBody: NonReadonly<RegisterInputBody>, options?: RequestInit): Promise<registerResponse> => {
@@ -360,7 +360,7 @@ export const getGetSessionUrl = () => {
 
   
 
-  return `http://localhost:8080/api/v1/auth/session`
+  return `/api/v1/auth/session`
 }
 
 export const getSession = async ( options?: RequestInit): Promise<getSessionResponse> => {
@@ -387,7 +387,7 @@ export const getSession = async ( options?: RequestInit): Promise<getSessionResp
 
 export const getGetSessionQueryKey = () => {
     return [
-    `http://localhost:8080/api/v1/auth/session`
+    `/api/v1/auth/session`
     ] as const;
     }
 
@@ -454,7 +454,7 @@ export const getSetActiveOrganizationUrl = () => {
 
   
 
-  return `http://localhost:8080/api/v1/auth/session/active-organization`
+  return `/api/v1/auth/session/active-organization`
 }
 
 export const setActiveOrganization = async (setActiveOrganizationInputBody: NonReadonly<SetActiveOrganizationInputBody>, options?: RequestInit): Promise<setActiveOrganizationResponse> => {

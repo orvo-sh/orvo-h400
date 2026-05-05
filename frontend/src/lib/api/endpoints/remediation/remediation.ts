@@ -22,10 +22,13 @@ import type {
 
 import type {
   AutoResolvePreview,
+  AutoResolveThreshold,
   ErrorModel,
+  ListAutoResolveThresholdsOutputBody,
   ListServiceRemediationMappingsOutputBody,
   RunLogAutoResolveOutputBody,
   ServiceRemediationMapping,
+  UpsertAutoResolveThresholdInputBody,
   UpsertServiceRemediationMappingInputBody
 } from '../../model';
 
@@ -93,7 +96,7 @@ export const getRunLogAutoResolveUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/logs/${logId}/auto-resolve`
+  return `/api/v1/organizations/${organizationId}/logs/${logId}/auto-resolve`
 }
 
 export const runLogAutoResolve = async (organizationId: string,
@@ -184,7 +187,7 @@ export const getGetLogAutoResolvePreviewUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/logs/${logId}/auto-resolve/preview`
+  return `/api/v1/organizations/${organizationId}/logs/${logId}/auto-resolve/preview`
 }
 
 export const getLogAutoResolvePreview = async (organizationId: string,
@@ -213,7 +216,7 @@ export const getLogAutoResolvePreview = async (organizationId: string,
 export const getGetLogAutoResolvePreviewQueryKey = (organizationId: string,
     logId: string,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/logs/${logId}/auto-resolve/preview`
+    `/api/v1/organizations/${organizationId}/logs/${logId}/auto-resolve/preview`
     ] as const;
     }
 
@@ -259,7 +262,285 @@ export function createGetLogAutoResolvePreview<TData = Awaited<ReturnType<typeof
 
 
 
-export type listServiceRemediationMappingsResponse200 = {
+export type listAutoResolveThresholdsResponse200 = {
+  data: ListAutoResolveThresholdsOutputBody
+  status: 200
+}
+
+export type listAutoResolveThresholdsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+    
+export type listAutoResolveThresholdsResponseSuccess = (listAutoResolveThresholdsResponse200) & {
+  headers: Headers;
+};
+export type listAutoResolveThresholdsResponseError = (listAutoResolveThresholdsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listAutoResolveThresholdsResponse = (listAutoResolveThresholdsResponseSuccess | listAutoResolveThresholdsResponseError)
+
+export const getListAutoResolveThresholdsUrl = (organizationId: string,) => {
+
+
+  
+
+  return `/api/v1/organizations/${organizationId}/remediation/auto-resolve-thresholds`
+}
+
+export const listAutoResolveThresholds = async (organizationId: string, options?: RequestInit): Promise<listAutoResolveThresholdsResponse> => {
+  
+  const res = await fetch(getListAutoResolveThresholdsUrl(organizationId),
+  {
+      credentials: 'include',
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: listAutoResolveThresholdsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAutoResolveThresholdsResponse
+}
+
+
+
+
+
+export const getListAutoResolveThresholdsQueryKey = (organizationId: string,) => {
+    return [
+    `/api/v1/organizations/${organizationId}/remediation/auto-resolve-thresholds`
+    ] as const;
+    }
+
+    
+export const getListAutoResolveThresholdsQueryOptions = <TData = Awaited<ReturnType<typeof listAutoResolveThresholds>>, TError = ErrorModel>(organizationId: string, options?: { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof listAutoResolveThresholds>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAutoResolveThresholdsQueryKey(organizationId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAutoResolveThresholds>>> = ({ signal }) => listAutoResolveThresholds(organizationId, { signal, ...fetchOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(organizationId), ...queryOptions} as CreateQueryOptions<Awaited<ReturnType<typeof listAutoResolveThresholds>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAutoResolveThresholdsQueryResult = NonNullable<Awaited<ReturnType<typeof listAutoResolveThresholds>>>
+export type ListAutoResolveThresholdsQueryError = ErrorModel
+
+
+
+export function createListAutoResolveThresholds<TData = Awaited<ReturnType<typeof listAutoResolveThresholds>>, TError = ErrorModel>(
+ organizationId: () =>  string, options?: () => { query?:Partial<CreateQueryOptions<Awaited<ReturnType<typeof listAutoResolveThresholds>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: () => QueryClient 
+ ): CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  
+
+  const query = createQuery(() => getListAutoResolveThresholdsQueryOptions(organizationId(),options?.()), queryClient) as CreateQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return query
+}
+
+
+
+
+export type deleteAutoResolveThresholdResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteAutoResolveThresholdResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+    
+export type deleteAutoResolveThresholdResponseSuccess = (deleteAutoResolveThresholdResponse204) & {
+  headers: Headers;
+};
+export type deleteAutoResolveThresholdResponseError = (deleteAutoResolveThresholdResponseDefault) & {
+  headers: Headers;
+};
+
+export type deleteAutoResolveThresholdResponse = (deleteAutoResolveThresholdResponseSuccess | deleteAutoResolveThresholdResponseError)
+
+export const getDeleteAutoResolveThresholdUrl = (organizationId: string,
+    serviceName: string,) => {
+
+
+  
+
+  return `/api/v1/organizations/${organizationId}/remediation/auto-resolve-thresholds/${serviceName}`
+}
+
+export const deleteAutoResolveThreshold = async (organizationId: string,
+    serviceName: string, options?: RequestInit): Promise<deleteAutoResolveThresholdResponse> => {
+  
+  const res = await fetch(getDeleteAutoResolveThresholdUrl(organizationId,serviceName),
+  {
+      credentials: 'include',
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: deleteAutoResolveThresholdResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as deleteAutoResolveThresholdResponse
+}
+
+
+
+
+export const getDeleteAutoResolveThresholdMutationOptions = <TError = ErrorModel,
+    TContext = unknown>(options?: { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof deleteAutoResolveThreshold>>, TError,{organizationId: string;serviceName: string}, TContext>, fetch?: RequestInit}
+): CreateMutationOptions<Awaited<ReturnType<typeof deleteAutoResolveThreshold>>, TError,{organizationId: string;serviceName: string}, TContext> => {
+
+const mutationKey = ['deleteAutoResolveThreshold'];
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAutoResolveThreshold>>, {organizationId: string;serviceName: string}> = (props) => {
+          const {organizationId,serviceName} = props ?? {};
+
+          return  deleteAutoResolveThreshold(organizationId,serviceName,fetchOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAutoResolveThresholdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAutoResolveThreshold>>>
+    
+    export type DeleteAutoResolveThresholdMutationError = ErrorModel
+
+    export const createDeleteAutoResolveThreshold = <TError = ErrorModel,
+    TContext = unknown>(options?: () => { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof deleteAutoResolveThreshold>>, TError,{organizationId: string;serviceName: string}, TContext>, fetch?: RequestInit}
+ , queryClient?: () => QueryClient): CreateMutationResult<
+        Awaited<ReturnType<typeof deleteAutoResolveThreshold>>,
+        TError,
+        {organizationId: string;serviceName: string},
+        TContext
+      > => {
+      return createMutation(() => ({ ...getDeleteAutoResolveThresholdMutationOptions(options?.()), queryClient }));
+    }
+    export type upsertAutoResolveThresholdResponse200 = {
+  data: AutoResolveThreshold
+  status: 200
+}
+
+export type upsertAutoResolveThresholdResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+    
+export type upsertAutoResolveThresholdResponseSuccess = (upsertAutoResolveThresholdResponse200) & {
+  headers: Headers;
+};
+export type upsertAutoResolveThresholdResponseError = (upsertAutoResolveThresholdResponseDefault) & {
+  headers: Headers;
+};
+
+export type upsertAutoResolveThresholdResponse = (upsertAutoResolveThresholdResponseSuccess | upsertAutoResolveThresholdResponseError)
+
+export const getUpsertAutoResolveThresholdUrl = (organizationId: string,
+    serviceName: string,) => {
+
+
+  
+
+  return `/api/v1/organizations/${organizationId}/remediation/auto-resolve-thresholds/${serviceName}`
+}
+
+export const upsertAutoResolveThreshold = async (organizationId: string,
+    serviceName: string,
+    upsertAutoResolveThresholdInputBody: NonReadonly<UpsertAutoResolveThresholdInputBody>, options?: RequestInit): Promise<upsertAutoResolveThresholdResponse> => {
+  
+  const res = await fetch(getUpsertAutoResolveThresholdUrl(organizationId,serviceName),
+  {
+      credentials: 'include',
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      upsertAutoResolveThresholdInputBody,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: upsertAutoResolveThresholdResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as upsertAutoResolveThresholdResponse
+}
+
+
+
+
+export const getUpsertAutoResolveThresholdMutationOptions = <TError = ErrorModel,
+    TContext = unknown>(options?: { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof upsertAutoResolveThreshold>>, TError,{organizationId: string;serviceName: string;data: NonReadonly<UpsertAutoResolveThresholdInputBody>}, TContext>, fetch?: RequestInit}
+): CreateMutationOptions<Awaited<ReturnType<typeof upsertAutoResolveThreshold>>, TError,{organizationId: string;serviceName: string;data: NonReadonly<UpsertAutoResolveThresholdInputBody>}, TContext> => {
+
+const mutationKey = ['upsertAutoResolveThreshold'];
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertAutoResolveThreshold>>, {organizationId: string;serviceName: string;data: NonReadonly<UpsertAutoResolveThresholdInputBody>}> = (props) => {
+          const {organizationId,serviceName,data} = props ?? {};
+
+          return  upsertAutoResolveThreshold(organizationId,serviceName,data,fetchOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertAutoResolveThresholdMutationResult = NonNullable<Awaited<ReturnType<typeof upsertAutoResolveThreshold>>>
+    export type UpsertAutoResolveThresholdMutationBody = NonReadonly<UpsertAutoResolveThresholdInputBody>
+    export type UpsertAutoResolveThresholdMutationError = ErrorModel
+
+    export const createUpsertAutoResolveThreshold = <TError = ErrorModel,
+    TContext = unknown>(options?: () => { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof upsertAutoResolveThreshold>>, TError,{organizationId: string;serviceName: string;data: NonReadonly<UpsertAutoResolveThresholdInputBody>}, TContext>, fetch?: RequestInit}
+ , queryClient?: () => QueryClient): CreateMutationResult<
+        Awaited<ReturnType<typeof upsertAutoResolveThreshold>>,
+        TError,
+        {organizationId: string;serviceName: string;data: NonReadonly<UpsertAutoResolveThresholdInputBody>},
+        TContext
+      > => {
+      return createMutation(() => ({ ...getUpsertAutoResolveThresholdMutationOptions(options?.()), queryClient }));
+    }
+    export type listServiceRemediationMappingsResponse200 = {
   data: ListServiceRemediationMappingsOutputBody
   status: 200
 }
@@ -283,7 +564,7 @@ export const getListServiceRemediationMappingsUrl = (organizationId: string,) =>
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/remediation/service-mappings`
+  return `/api/v1/organizations/${organizationId}/remediation/service-mappings`
 }
 
 export const listServiceRemediationMappings = async (organizationId: string, options?: RequestInit): Promise<listServiceRemediationMappingsResponse> => {
@@ -310,7 +591,7 @@ export const listServiceRemediationMappings = async (organizationId: string, opt
 
 export const getListServiceRemediationMappingsQueryKey = (organizationId: string,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/remediation/service-mappings`
+    `/api/v1/organizations/${organizationId}/remediation/service-mappings`
     ] as const;
     }
 
@@ -378,7 +659,7 @@ export const getDeleteServiceRemediationMappingUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/remediation/service-mappings/${serviceName}`
+  return `/api/v1/organizations/${organizationId}/remediation/service-mappings/${serviceName}`
 }
 
 export const deleteServiceRemediationMapping = async (organizationId: string,
@@ -469,7 +750,7 @@ export const getUpsertServiceRemediationMappingUrl = (organizationId: string,
 
   
 
-  return `http://localhost:8080/api/v1/organizations/${organizationId}/remediation/service-mappings/${serviceName}`
+  return `/api/v1/organizations/${organizationId}/remediation/service-mappings/${serviceName}`
 }
 
 export const upsertServiceRemediationMapping = async (organizationId: string,

@@ -5,12 +5,16 @@
  * OpenAPI spec version: 1.0.0
  */
 import {
+  createMutation,
   createQuery
 } from '@tanstack/svelte-query';
 import type {
+  CreateMutationOptions,
+  CreateMutationResult,
   CreateQueryOptions,
   CreateQueryResult,
   DataTag,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey
@@ -25,7 +29,9 @@ import type {
   GetRedMetricsParams,
   QueryTimeseriesOutputBody,
   QueryTimeseriesParams,
-  REDMetrics
+  REDMetrics,
+  RecalculateDerivedMetricsOutputBody,
+  RecalculateDerivedMetricsParams
 } from '../../model';
 
 
@@ -72,7 +78,7 @@ export const getGetMetricCatalogUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/catalog?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/catalog`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/metrics/catalog?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/metrics/catalog`
 }
 
 export const getMetricCatalog = async (organizationId: string,
@@ -101,7 +107,7 @@ export const getMetricCatalog = async (organizationId: string,
 export const getGetMetricCatalogQueryKey = (organizationId: string,
     params?: GetMetricCatalogParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/catalog`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/metrics/catalog`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -147,7 +153,105 @@ export function createGetMetricCatalog<TData = Awaited<ReturnType<typeof getMetr
 
 
 
-export type getRedMetricsResponse200 = {
+export type recalculateDerivedMetricsResponse200 = {
+  data: RecalculateDerivedMetricsOutputBody
+  status: 200
+}
+
+export type recalculateDerivedMetricsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+    
+export type recalculateDerivedMetricsResponseSuccess = (recalculateDerivedMetricsResponse200) & {
+  headers: Headers;
+};
+export type recalculateDerivedMetricsResponseError = (recalculateDerivedMetricsResponseDefault) & {
+  headers: Headers;
+};
+
+export type recalculateDerivedMetricsResponse = (recalculateDerivedMetricsResponseSuccess | recalculateDerivedMetricsResponseError)
+
+export const getRecalculateDerivedMetricsUrl = (organizationId: string,
+    params?: RecalculateDerivedMetricsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/metrics/derived/recalculate?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/metrics/derived/recalculate`
+}
+
+export const recalculateDerivedMetrics = async (organizationId: string,
+    params?: RecalculateDerivedMetricsParams, options?: RequestInit): Promise<recalculateDerivedMetricsResponse> => {
+  
+  const res = await fetch(getRecalculateDerivedMetricsUrl(organizationId,params),
+  {
+      credentials: 'include',
+    ...options,
+    method: 'POST'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: recalculateDerivedMetricsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as recalculateDerivedMetricsResponse
+}
+
+
+
+
+export const getRecalculateDerivedMetricsMutationOptions = <TError = ErrorModel,
+    TContext = unknown>(options?: { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof recalculateDerivedMetrics>>, TError,{organizationId: string;params?: RecalculateDerivedMetricsParams}, TContext>, fetch?: RequestInit}
+): CreateMutationOptions<Awaited<ReturnType<typeof recalculateDerivedMetrics>>, TError,{organizationId: string;params?: RecalculateDerivedMetricsParams}, TContext> => {
+
+const mutationKey = ['recalculateDerivedMetrics'];
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recalculateDerivedMetrics>>, {organizationId: string;params?: RecalculateDerivedMetricsParams}> = (props) => {
+          const {organizationId,params} = props ?? {};
+
+          return  recalculateDerivedMetrics(organizationId,params,fetchOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecalculateDerivedMetricsMutationResult = NonNullable<Awaited<ReturnType<typeof recalculateDerivedMetrics>>>
+    
+    export type RecalculateDerivedMetricsMutationError = ErrorModel
+
+    export const createRecalculateDerivedMetrics = <TError = ErrorModel,
+    TContext = unknown>(options?: () => { mutation?:CreateMutationOptions<Awaited<ReturnType<typeof recalculateDerivedMetrics>>, TError,{organizationId: string;params?: RecalculateDerivedMetricsParams}, TContext>, fetch?: RequestInit}
+ , queryClient?: () => QueryClient): CreateMutationResult<
+        Awaited<ReturnType<typeof recalculateDerivedMetrics>>,
+        TError,
+        {organizationId: string;params?: RecalculateDerivedMetricsParams},
+        TContext
+      > => {
+      return createMutation(() => ({ ...getRecalculateDerivedMetricsMutationOptions(options?.()), queryClient }));
+    }
+    export type getRedMetricsResponse200 = {
   data: REDMetrics
   status: 200
 }
@@ -179,7 +283,7 @@ export const getGetRedMetricsUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/red?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/red`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/metrics/red?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/metrics/red`
 }
 
 export const getRedMetrics = async (organizationId: string,
@@ -208,7 +312,7 @@ export const getRedMetrics = async (organizationId: string,
 export const getGetRedMetricsQueryKey = (organizationId: string,
     params?: GetRedMetricsParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/red`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/metrics/red`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -286,7 +390,7 @@ export const getGetMetricSummaryUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/summary?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/summary`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/metrics/summary?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/metrics/summary`
 }
 
 export const getMetricSummary = async (organizationId: string,
@@ -315,7 +419,7 @@ export const getMetricSummary = async (organizationId: string,
 export const getGetMetricSummaryQueryKey = (organizationId: string,
     params?: GetMetricSummaryParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/summary`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/metrics/summary`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -393,7 +497,7 @@ export const getQueryTimeseriesUrl = (organizationId: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries?${stringifiedParams}` : `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries`
+  return stringifiedParams.length > 0 ? `/api/v1/organizations/${organizationId}/metrics/timeseries?${stringifiedParams}` : `/api/v1/organizations/${organizationId}/metrics/timeseries`
 }
 
 export const queryTimeseries = async (organizationId: string,
@@ -422,7 +526,7 @@ export const queryTimeseries = async (organizationId: string,
 export const getQueryTimeseriesQueryKey = (organizationId: string,
     params?: QueryTimeseriesParams,) => {
     return [
-    `http://localhost:8080/api/v1/organizations/${organizationId}/metrics/timeseries`, ...(params ? [params] : [])
+    `/api/v1/organizations/${organizationId}/metrics/timeseries`, ...(params ? [params] : [])
     ] as const;
     }
 

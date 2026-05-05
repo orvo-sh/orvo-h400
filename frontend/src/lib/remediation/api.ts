@@ -1,19 +1,24 @@
 import {
+	deleteAutoResolveThreshold as deleteAutoResolveThresholdRequest,
 	deleteServiceRemediationMapping as deleteServiceRemediationMappingRequest,
 	getLogAutoResolvePreview as getLogAutoResolvePreviewRequest,
+	listAutoResolveThresholds as listAutoResolveThresholdsRequest,
 	listServiceRemediationMappings as listServiceRemediationMappingsRequest,
 	runLogAutoResolve as runLogAutoResolveRequest,
+	upsertAutoResolveThreshold as upsertAutoResolveThresholdRequest,
 	upsertServiceRemediationMapping as upsertServiceRemediationMappingRequest
 } from '$lib/api/endpoints/remediation/remediation';
 import type {
+	AutoResolveThreshold,
 	AutoResolvePreview,
 	ErrorDetail,
 	ErrorModel,
 	RunLogAutoResolveOutputBody,
-	ServiceRemediationMapping
+	ServiceRemediationMapping,
+	UpsertAutoResolveThresholdInputBody
 } from '$lib/api/model';
 
-export type { AutoResolvePreview, ServiceRemediationMapping } from '$lib/api/model';
+export type { AutoResolvePreview, AutoResolveThreshold, ServiceRemediationMapping } from '$lib/api/model';
 
 export interface APIErrorDetail {
 	location?: string;
@@ -145,6 +150,57 @@ export async function runLogAutoResolve(
 			throw toRemediationError(response.status, response.data);
 		}
 		return response.data;
+	} catch (error) {
+		return wrapEndpointError(error);
+	}
+}
+
+export async function listAutoResolveThresholds(
+	organizationID: string
+): Promise<AutoResolveThreshold[]> {
+	try {
+		const response = await listAutoResolveThresholdsRequest(organizationID);
+		if (response.status !== 200) {
+			throw toRemediationError(response.status, response.data);
+		}
+		return response.data.thresholds ?? [];
+	} catch (error) {
+		return wrapEndpointError(error);
+	}
+}
+
+export async function upsertAutoResolveThreshold(
+	organizationID: string,
+	serviceName: string,
+	input: UpsertAutoResolveThresholdInputBody
+): Promise<AutoResolveThreshold> {
+	try {
+		const response = await upsertAutoResolveThresholdRequest(
+			organizationID,
+			encodeURIComponent(serviceName),
+			input
+		);
+		if (response.status !== 200) {
+			throw toRemediationError(response.status, response.data);
+		}
+		return response.data;
+	} catch (error) {
+		return wrapEndpointError(error);
+	}
+}
+
+export async function deleteAutoResolveThreshold(
+	organizationID: string,
+	serviceName: string
+): Promise<void> {
+	try {
+		const response = await deleteAutoResolveThresholdRequest(
+			organizationID,
+			encodeURIComponent(serviceName)
+		);
+		if (response.status !== 204) {
+			throw toRemediationError(response.status, response.data);
+		}
 	} catch (error) {
 		return wrapEndpointError(error);
 	}

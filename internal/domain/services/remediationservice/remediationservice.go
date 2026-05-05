@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/orvo-sh/orvo/internal/domain/errs"
 	"github.com/orvo-sh/orvo/internal/domain/models"
 	"github.com/orvo-sh/orvo/internal/domain/services/githubservice"
+	"github.com/orvo-sh/orvo/internal/domain/services/metricservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/traceservice"
 	"github.com/orvo-sh/orvo/internal/domain/workers"
 	"github.com/orvo-sh/orvo/internal/infra/postgres"
@@ -27,15 +28,19 @@ type Service interface {
 	ListMappings(ctx context.Context, organizationID string) ([]models.ServiceRemediationMapping, apperr.Error)
 	UpsertMapping(ctx context.Context, input UpsertMappingInput) (*models.ServiceRemediationMapping, apperr.Error)
 	DeleteMapping(ctx context.Context, organizationID string, serviceName string) apperr.Error
+	ListAutoResolveThresholds(ctx context.Context, organizationID string) ([]models.AutoResolveThreshold, apperr.Error)
+	UpsertAutoResolveThreshold(ctx context.Context, input UpsertAutoResolveThresholdInput) (*models.AutoResolveThreshold, apperr.Error)
+	DeleteAutoResolveThreshold(ctx context.Context, organizationID string, serviceName string) apperr.Error
 	PreviewAutoResolve(ctx context.Context, input PreviewAutoResolveInput) (*models.AutoResolvePreview, apperr.Error)
 	RunAutoResolve(ctx context.Context, input RunAutoResolveInput) (*models.SandboxJob, apperr.Error)
+	ProcessAutoResolveThresholds(ctx context.Context) error
 }
 
 type Config struct {
 	OpencodeCommand    string
 	OpencodeModel      string
+	OpencodeVariant    string
 	OpencodeAgent      string
-	OpencodeTimeout    time.Duration
 	ContextWindow      time.Duration
 	NearbyErrorLimit   int
 	MaxContextBytes    int
@@ -65,27 +70,28 @@ type sandboxJobCreator interface {
 }
 
 type service struct {
-	pg            *postgres.DB
-	logger        *slog.Logger
-	githubService githubservice.Service
-	traceService  traceservice.Service
-	sandboxJobs   sandboxJobCreator
-	config        Config
+	pg                  *postgres.DB
+	logger              *slog.Logger
+	githubService       githubservice.Service
+	metricService       metricQuerier
+	traceService        traceservice.Service
+	sandboxJobs         sandboxJobCreator
+	config              Config
+	thresholdSchemaOnce sync.Once
+	thresholdSchemaErr  error
 }
 
 func New(
 	pg *postgres.DB,
 	logger *slog.Logger,
 	githubService githubservice.Service,
+	metricService metricservice.Service,
 	traceService traceservice.Service,
 	sandboxJobs sandboxJobCreator,
 	config Config,
 ) Service {
 	if strings.TrimSpace(config.OpencodeCommand) == "" {
 		config.OpencodeCommand = "opencode"
-	}
-	if config.OpencodeTimeout <= 0 {
-		config.OpencodeTimeout = 8 * time.Minute
 	}
 	if config.ContextWindow <= 0 {
 		config.ContextWindow = 15 * time.Minute
@@ -109,6 +115,7 @@ func New(
 		pg:            pg,
 		logger:        logger.With("module", "remediation_service"),
 		githubService: githubService,
+		metricService: metricService,
 		traceService:  traceService,
 		sandboxJobs:   sandboxJobs,
 		config:        config,
@@ -147,31 +154,28 @@ func (s *service) RunAutoResolve(ctx context.Context, input RunAutoResolveInput)
 		"--model",
 		shellQuote(s.config.OpencodeModel),
 	}
+	if strings.TrimSpace(s.config.OpencodeVariant) != "" {
+		opencodeArgs = append(opencodeArgs, "--variant", shellQuote(s.config.OpencodeVariant))
+	}
 	if strings.TrimSpace(s.config.OpencodeAgent) != "" {
 		opencodeArgs = append(opencodeArgs, "--agent", shellQuote(s.config.OpencodeAgent))
 	}
 	opencodeArgs = append(opencodeArgs, shellQuote(plan.Prompt))
 	opencodeRunCommand := strings.Join(opencodeArgs, " ")
-	timeoutWrap := opencodeRunCommand
-	if s.config.OpencodeTimeout > 0 {
-		timeoutWrap = fmt.Sprintf(
-			"if command -v timeout >/dev/null 2>&1; then timeout %ss %s; else %s; fi",
-			strconv.Itoa(int(s.config.OpencodeTimeout.Seconds())),
-			opencodeRunCommand,
-			opencodeRunCommand,
-		)
-	}
 	ensureOpencodeInstalledCommand := buildEnsureOpencodeInstalledCommand(s.config.OpencodeCommand)
+	blockPackageManagersCommand := buildBlockPackageManagersCommand()
 
-	commands := []string{
-		ensureOpencodeInstalledCommand,
-		fmt.Sprintf(
-			"if ! command -v %s >/dev/null 2>&1; then echo '%s not found in sandbox after install step'; exit 127; fi && %s",
-			shellQuote(s.config.OpencodeCommand),
-			s.config.OpencodeCommand,
-			timeoutWrap,
-		),
-	}
+		commands := []string{
+			ensureOpencodeInstalledCommand,
+			blockPackageManagersCommand,
+			fmt.Sprintf(
+				"%s; if ! command -v %s >/dev/null 2>&1; then echo '%s not found in sandbox after install step'; exit 127; fi && PATH=\"$PWD/.orvo/opencode-bin:$PATH\" %s",
+				models.AutoResolveOpencodeCommandMarker,
+				shellQuote(s.config.OpencodeCommand),
+				s.config.OpencodeCommand,
+				opencodeRunCommand,
+			),
+		}
 	commands = append(commands, s.config.ValidationCommands...)
 
 	job, appErr := s.sandboxJobs.CreateJob(ctx, workers.CreateSandboxJobInput{
@@ -241,7 +245,7 @@ func (s *service) buildAutoResolvePlan(ctx context.Context, organizationID strin
 		RepositoryID:       mapping.RepositoryID,
 		RepositoryFullName: mapping.RepositoryFullName,
 		BaseBranch:         baseBranch,
-		TaskTitle:          fmt.Sprintf("Auto-resolve %s error %s", logRecord.ServiceName, logRecord.ID),
+		TaskTitle:          fmt.Sprintf("Auto-resolve %s: %s", logRecord.ServiceName, summarizeLogBody(logRecord.Body)),
 		CommitMessage:      fmt.Sprintf("fix(%s): auto-resolve error %s", normalizeForCommitScope(logRecord.ServiceName), shortID),
 		ValidationCommands: append([]string{}, s.config.ValidationCommands...),
 		ContextSummary: models.AutoResolveContextSummary{
@@ -249,6 +253,13 @@ func (s *service) buildAutoResolvePlan(ctx context.Context, organizationID strin
 			NearbyErrorLogCount: len(nearbyErrors),
 		},
 	}
+	preview.RelatedRepositories = s.loadRelatedRepositoryContexts(
+		ctx,
+		organizationID,
+		logRecord.ServiceName,
+		traceSpans,
+		mapping.RepositoryID,
+	)
 
 	contextPayload := map[string]any{
 		"generated_at":             time.Now().UTC().Format(time.RFC3339),
@@ -256,6 +267,7 @@ func (s *service) buildAutoResolvePlan(ctx context.Context, organizationID strin
 		"trace_spans":              traceSpans,
 		"nearby_service_errors":    nearbyErrors,
 		"repository_full_name":     mapping.RepositoryFullName,
+		"related_repositories":     preview.RelatedRepositories,
 		"suggested_base_branch":    baseBranch,
 		"suggested_task_title":     preview.TaskTitle,
 		"suggested_commit_message": preview.CommitMessage,
@@ -271,7 +283,12 @@ func (s *service) buildAutoResolvePlan(ctx context.Context, organizationID strin
 
 	prompt := strings.TrimSpace(fmt.Sprintf(
 		"Use .orvo/incident-context.json to diagnose and fix the error. "+
-			"Make the smallest safe code changes to resolve the issue, then keep repository tests green. "+
+			"Make the smallest safe code changes to resolve the issue in /workspace/repo only. "+
+			"If .orvo/related-repositories.json exists, inspect those repositories at /workspace/related for read-only context only; do not edit files outside /workspace/repo and do not attempt a multi-repo patch. "+
+			"Before stopping, write a short markdown summary to .orvo/auto-resolve-summary.md with sections: Error, Root Cause, Fix, Validation, Cross-Service Notes. "+
+			"Do not install dependencies or run package managers (npm/pnpm/yarn/bun/apt/apk/dnf/yum/pip). "+
+			"Do not run long test suites; prefer quick sanity checks only. "+
+			"Stop after applying the minimal patch. "+
 			"Service: %s. Log ID: %s.",
 		logRecord.ServiceName,
 		logRecord.ID,
@@ -289,6 +306,17 @@ func shortLogID(id string) string {
 		return id
 	}
 	return id[:8]
+}
+
+func summarizeLogBody(body string) string {
+	body = strings.Join(strings.Fields(strings.TrimSpace(body)), " ")
+	if body == "" {
+		return "incident remediation"
+	}
+	if len(body) <= 72 {
+		return body
+	}
+	return body[:69] + "..."
 }
 
 func normalizeForCommitScope(service string) string {
@@ -317,6 +345,13 @@ func buildEnsureOpencodeInstalledCommand(opencodeCommand string) string {
 	return fmt.Sprintf("if command -v %s >/dev/null 2>&1; then echo 'opencode available'; else ", quoted) +
 		"if command -v timeout >/dev/null 2>&1; then timeout 180s sh -lc " + shellQuote(installCommand) + "; " +
 		"else sh -lc " + shellQuote(installCommand) + "; fi; fi"
+}
+
+func buildBlockPackageManagersCommand() string {
+	return "mkdir -p .orvo/opencode-bin && " +
+		"for cmd in npm pnpm yarn bun apt-get apk dnf yum pip pip3; do " +
+		"printf '#!/bin/sh\\necho \"package manager disabled during opencode run: %s\" >&2\\nexit 127\\n' \"$cmd\" > .orvo/opencode-bin/$cmd && chmod +x .orvo/opencode-bin/$cmd; " +
+		"done"
 }
 
 func serviceNameFromLog(record *models.LogRecord) string {

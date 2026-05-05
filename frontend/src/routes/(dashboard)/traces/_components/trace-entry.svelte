@@ -13,6 +13,8 @@
 		onclick?: () => void;
 	} = $props();
 
+	const SLOW_TRACE_THRESHOLD_NS = 3_000_000_000;
+
 	function formatTimestamp(iso: string): string {
 		const date = new Date(iso);
 		const dateStr = date
@@ -40,6 +42,7 @@
 	}
 
 	const hasErrors = $derived(trace.error_count > 0);
+	const isSlow = $derived(trace.duration_ns >= SLOW_TRACE_THRESHOLD_NS);
 
 	// Color-code the duration bar proportionally (max 500ms = full width for visual reference)
 	const durationMs = $derived(trace.duration_ns / 1_000_000);
@@ -72,11 +75,15 @@
 		<div class="flex items-center gap-2">
 			<div class="h-2 flex-1 rounded-full bg-muted">
 				<div
-					class="h-full rounded-full {hasErrors ? 'bg-red-500' : 'bg-primary'}"
+					class="h-full rounded-full {hasErrors || isSlow ? 'bg-red-500' : 'bg-primary'}"
 					style="width: {barWidth}%"
 				></div>
 			</div>
-			<span class="w-[60px] text-right font-mono text-xs text-muted-foreground">
+			<span
+				class="w-[60px] text-right font-mono text-xs {hasErrors || isSlow
+					? 'text-red-500'
+					: 'text-muted-foreground'}"
+			>
 				{formatDuration(trace.duration_ns)}
 			</span>
 		</div>
@@ -95,6 +102,8 @@
 				<AlertCircleIcon class="size-3" />
 				{trace.error_count}
 			</div>
+		{:else if isSlow}
+			<Badge variant="destructive" class="px-1.5 py-0 text-[10px]">Slow</Badge>
 		{/if}
 	</div>
 </button>

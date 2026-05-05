@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/orvo-sh/orvo/internal/domain/errs"
 	"github.com/orvo-sh/orvo/internal/domain/models"
 	"github.com/orvo-sh/orvo/internal/domain/services/authservice"
 	"github.com/orvo-sh/orvo/internal/domain/services/remediationservice"
@@ -53,6 +56,30 @@ func (h *RemediationHandler) RegisterRoutes(api huma.API) {
 		Tags:        []string{"remediation"},
 		Middlewares: huma.Middlewares{authMiddleware},
 	}, h.deleteServiceMapping)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-auto-resolve-thresholds",
+		Method:      http.MethodGet,
+		Path:        "/organizations/{organization_id}/remediation/auto-resolve-thresholds",
+		Tags:        []string{"remediation"},
+		Middlewares: huma.Middlewares{authMiddleware},
+	}, h.listAutoResolveThresholds)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "upsert-auto-resolve-threshold",
+		Method:      http.MethodPut,
+		Path:        "/organizations/{organization_id}/remediation/auto-resolve-thresholds/{service_name}",
+		Tags:        []string{"remediation"},
+		Middlewares: huma.Middlewares{authMiddleware},
+	}, h.upsertAutoResolveThreshold)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-auto-resolve-threshold",
+		Method:      http.MethodDelete,
+		Path:        "/organizations/{organization_id}/remediation/auto-resolve-thresholds/{service_name}",
+		Tags:        []string{"remediation"},
+		Middlewares: huma.Middlewares{authMiddleware},
+	}, h.deleteAutoResolveThreshold)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-log-auto-resolve-preview",
@@ -125,6 +152,71 @@ func (h *RemediationHandler) deleteServiceMapping(ctx context.Context, input *dt
 	return nil, nil
 }
 
+func (h *RemediationHandler) listAutoResolveThresholds(ctx context.Context, input *dto.ListAutoResolveThresholdsInput) (*dto.ListAutoResolveThresholdsOutput, error) {
+	session := authmiddleware.GetSessionFromContext(ctx)
+	if appErr := h.ensureAdminOrOwner(ctx, session.UserID, input.OrganizationID); appErr != nil {
+		return nil, helpers.ToHTTPError(appErr)
+	}
+
+	thresholds, appErr := h.remediationService.ListAutoResolveThresholds(ctx, input.OrganizationID)
+	if appErr != nil {
+		return nil, helpers.ToHTTPError(appErr)
+	}
+
+	out := &dto.ListAutoResolveThresholdsOutput{}
+	for _, threshold := range thresholds {
+		out.Body.Thresholds = append(out.Body.Thresholds, thresholdToDTO(threshold))
+	}
+	return out, nil
+}
+
+func (h *RemediationHandler) upsertAutoResolveThreshold(ctx context.Context, input *dto.UpsertAutoResolveThresholdInput) (*dto.UpsertAutoResolveThresholdOutput, error) {
+	session := authmiddleware.GetSessionFromContext(ctx)
+	if appErr := h.ensureAdminOrOwner(ctx, session.UserID, input.OrganizationID); appErr != nil {
+		return nil, helpers.ToHTTPError(appErr)
+	}
+
+	lookbackWindow, err := time.ParseDuration(strings.TrimSpace(input.Body.LookbackWindow))
+	if err != nil {
+		return nil, helpers.ToHTTPError(errs.ErrBadRequest)
+	}
+	cooldown, err := time.ParseDuration(strings.TrimSpace(input.Body.Cooldown))
+	if err != nil {
+		return nil, helpers.ToHTTPError(errs.ErrBadRequest)
+	}
+
+	threshold, appErr := h.remediationService.UpsertAutoResolveThreshold(ctx, remediationservice.UpsertAutoResolveThresholdInput{
+		OrganizationID: input.OrganizationID,
+		ServiceName:    input.ServiceName,
+		UserID:         session.UserID,
+		ThresholdValue: input.Body.ThresholdValue,
+		LookbackWindow: lookbackWindow,
+		Cooldown:       cooldown,
+		Quorum:         input.Body.Quorum,
+		Enabled:        input.Body.Enabled,
+	})
+	if appErr != nil {
+		return nil, helpers.ToHTTPError(appErr)
+	}
+
+	return &dto.UpsertAutoResolveThresholdOutput{
+		Body: thresholdToDTO(*threshold),
+	}, nil
+}
+
+func (h *RemediationHandler) deleteAutoResolveThreshold(ctx context.Context, input *dto.DeleteAutoResolveThresholdInput) (*dto.Empty, error) {
+	session := authmiddleware.GetSessionFromContext(ctx)
+	if appErr := h.ensureAdminOrOwner(ctx, session.UserID, input.OrganizationID); appErr != nil {
+		return nil, helpers.ToHTTPError(appErr)
+	}
+
+	if appErr := h.remediationService.DeleteAutoResolveThreshold(ctx, input.OrganizationID, strings.TrimSpace(input.ServiceName)); appErr != nil {
+		return nil, helpers.ToHTTPError(appErr)
+	}
+
+	return nil, nil
+}
+
 func (h *RemediationHandler) previewLogAutoResolve(ctx context.Context, input *dto.GetLogAutoResolvePreviewInput) (*dto.GetLogAutoResolvePreviewOutput, error) {
 	session := authmiddleware.GetSessionFromContext(ctx)
 	if appErr := h.authService.EnsureOrganizationMember(ctx, session.UserID, input.OrganizationID); appErr != nil {
@@ -172,4 +264,38 @@ func (h *RemediationHandler) ensureAdminOrOwner(ctx context.Context, userID stri
 		models.OrganizationMemberRoleOwner,
 		models.OrganizationMemberRoleAdmin,
 	)
+}
+
+func thresholdToDTO(threshold models.AutoResolveThreshold) dto.AutoResolveThreshold {
+	out := dto.AutoResolveThreshold{
+		ID:             threshold.ID,
+		ServiceName:    threshold.ServiceName,
+		MetricName:     threshold.MetricName,
+		ThresholdValue: threshold.ThresholdValue,
+		LookbackWindow: formatDurationCompact(time.Duration(threshold.LookbackWindowSeconds) * time.Second),
+		Cooldown:       formatDurationCompact(time.Duration(threshold.CooldownSeconds) * time.Second),
+		Quorum:         threshold.Quorum,
+		Enabled:        threshold.Enabled,
+		CreatedAt:      threshold.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:      threshold.UpdatedAt.Format(time.RFC3339),
+	}
+	if threshold.LastTriggeredAt != nil {
+		out.LastTriggeredAt = threshold.LastTriggeredAt.Format(time.RFC3339)
+	}
+	return out
+}
+
+func formatDurationCompact(value time.Duration) string {
+	if value <= 0 {
+		return "0s"
+	}
+	seconds := int(value.Seconds())
+	switch {
+	case seconds%3600 == 0:
+		return fmt.Sprintf("%dh", seconds/3600)
+	case seconds%60 == 0:
+		return fmt.Sprintf("%dm", seconds/60)
+	default:
+		return fmt.Sprintf("%ds", seconds)
+	}
 }

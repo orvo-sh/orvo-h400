@@ -15,6 +15,7 @@ type Service interface {
 	GetMetricCatalog(ctx context.Context, input GetMetricCatalogInput) (*GetMetricCatalogOutput, apperr.Error)
 	GetREDMetrics(ctx context.Context, input GetREDMetricsInput) (*models.REDMetrics, apperr.Error)
 	GetMetricSummary(ctx context.Context, input GetMetricSummaryInput) (*GetMetricSummaryOutput, apperr.Error)
+	RecalculateDerivedMetrics(ctx context.Context, input RecalculateDerivedMetricsInput) (*RecalculateDerivedMetricsOutput, apperr.Error)
 }
 
 type service struct {
@@ -79,4 +80,23 @@ type GetMetricSummaryInput struct {
 type GetMetricSummaryOutput struct {
 	Value     float64   `json:"value"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+// RecalculateDerivedMetricsInput defines parameters for forcing a derived metrics recomputation window.
+type RecalculateDerivedMetricsInput struct {
+	OrganizationID string
+	ServiceName    string
+	LookbackWindow time.Duration
+}
+
+type RecalculateDerivedMetricsOutput struct {
+	OrganizationID      string    `json:"organization_id"`
+	ServiceName         string    `json:"service_name,omitempty"`
+	WindowStart         time.Time `json:"window_start"`
+	WindowEnd           time.Time `json:"window_end"`
+	AsOf                time.Time `json:"as_of"`
+	RequestSpanCount    int64     `json:"request_span_count"`
+	ErrorSpanCount      int64     `json:"error_span_count"`
+	ErrorLogCount       int64     `json:"error_log_count"`
+	CombinedErrorEvents int64     `json:"combined_error_events"`
 }
