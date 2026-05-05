@@ -172,6 +172,14 @@ func (s *service) UpsertAutoResolveThreshold(ctx context.Context, input UpsertAu
 	if quorum <= 0 {
 		quorum = defaultThresholdQuorum
 	}
+	if input.Enabled {
+		if strings.TrimSpace(s.config.OpencodeCommand) == "" || strings.TrimSpace(s.config.OpencodeModel) == "" {
+			return nil, errs.ErrAutoResolveOpencodeMissing
+		}
+		if _, appErr := s.loadMappingForService(ctx, input.OrganizationID, serviceName); appErr != nil {
+			return nil, appErr
+		}
+	}
 
 	row := s.pg.Pool().QueryRow(ctx, `
 		INSERT INTO auto_resolve_thresholds (

@@ -19,6 +19,7 @@
 		deleteAutoResolveThreshold,
 		listAutoResolveThresholds,
 		listServiceRemediationMappings,
+		RemediationAPIError,
 		type AutoResolveThreshold,
 		type ServiceRemediationMapping,
 		upsertAutoResolveThreshold
@@ -235,6 +236,10 @@
 			return { label: 'Paused', variant: 'outline' };
 		}
 
+		if (!selectedServiceMapping) {
+			return { label: 'Needs mapping', variant: 'outline' };
+		}
+
 		return { label: 'Active', variant: 'secondary' };
 	});
 
@@ -283,9 +288,14 @@
 		thresholdCooldown = normalizeThresholdCooldown(threshold.cooldown);
 		thresholdQuorum = String(threshold.quorum);
 		thresholdEnabled = threshold.enabled;
-		thresholdHint = threshold.enabled
+		if (!threshold.enabled) {
+			thresholdHint = 'Saved threshold is paused.';
+			return;
+		}
+
+		thresholdHint = selectedServiceMapping
 			? 'Saved threshold is active.'
-			: 'Saved threshold is paused.';
+			: 'Saved threshold needs a repository mapping before Auto Resolve can run.';
 	}
 
 	function normalizeThresholdWindow(value: string): ThresholdWindow {
@@ -398,6 +408,10 @@
 			thresholdsError = 'Failed requests must be at least 1.';
 			return;
 		}
+		if (thresholdEnabled && !selectedServiceMapping) {
+			thresholdsError = 'Map this service to a repository before arming Auto Resolve.';
+			return;
+		}
 
 		thresholdsSaving = true;
 		thresholdsError = null;
@@ -414,7 +428,17 @@
 				? 'Threshold saved. Auto Resolve is now watching this service.'
 				: 'Threshold saved, but it is paused.';
 		} catch (error) {
-			thresholdsError = error instanceof Error ? error.message : 'failed to save threshold';
+			if (error instanceof RemediationAPIError) {
+				if (error.code === 'auto_resolve_service_mapping_missing') {
+					thresholdsError = 'Map this service to a repository before arming Auto Resolve.';
+				} else if (error.code === 'auto_resolve_opencode_not_configured') {
+					thresholdsError = 'Auto Resolve is not configured on the server yet.';
+				} else {
+					thresholdsError = error.message;
+				}
+			} else {
+				thresholdsError = error instanceof Error ? error.message : 'failed to save threshold';
+			}
 		} finally {
 			thresholdsSaving = false;
 		}
@@ -565,8 +589,9 @@
 							<Badge variant={thresholdStatus.variant}>{thresholdStatus.label}</Badge>
 						</div>
 						<Card.Description>
-							Click a point on the Error Rate chart, then save. When the service stays above that rate
-							for the selected window and enough requests fail, Auto Resolve can start.
+							Click a point on the Error Rate chart, then save. Auto Resolve can start after the
+							service crosses that rate within the selected window, enough requests fail, and the
+							service is mapped to a repository.
 						</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-4">
@@ -654,7 +679,7 @@
 							</p>
 						{:else if !thresholdsLoading}
 							<p class="text-xs text-amber-700">
-								No repository is mapped to this service yet. Thresholds still work, but opening a PR later will need a mapping in
+								No repository is mapped to this service yet. Auto Resolve cannot arm this threshold until a mapping exists in
 								<a class="underline" href="/settings#remediation-mappings">Settings</a>.
 							</p>
 						{/if}
