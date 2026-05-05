@@ -96,6 +96,8 @@ type SandboxConfig struct {
 	WorkingDir          string        `env:"WORKING_DIR" envDefault:"/workspace"`
 	CPULimit            string        `env:"CPU_LIMIT" envDefault:"2"`
 	MemoryLimit         string        `env:"MEMORY_LIMIT" envDefault:"4g"`
+	OpencodeConfigDir   string        `env:"OPENCODE_CONFIG_DIR"`
+	OpencodeAuthFile    string        `env:"OPENCODE_AUTH_FILE"`
 	FallbackToContainer bool          `env:"FALLBACK_TO_CONTAINER" envDefault:"true"`
 	JobTimeout          time.Duration `env:"JOB_TIMEOUT" envDefault:"45m"`
 	CommandTimeout      time.Duration `env:"COMMAND_TIMEOUT" envDefault:"10m"`

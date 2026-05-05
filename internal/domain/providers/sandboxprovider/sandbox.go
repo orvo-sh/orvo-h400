@@ -23,6 +23,8 @@ type Config struct {
 	WorkingDir          string
 	CPULimit            string
 	MemoryLimit         string
+	OpencodeConfigDir   string
+	OpencodeAuthFile    string
 	FallbackToContainer bool
 }
 
@@ -273,6 +275,15 @@ func (p *provider) createContainerSession(ctx context.Context, name string, imag
 	}
 	if strings.TrimSpace(memory) != "" {
 		args = append(args, "--memory", memory)
+	}
+	if strings.TrimSpace(p.cfg.OpencodeConfigDir) != "" {
+		args = append(args, "-e", "HOME=/root")
+		args = append(args, "-e", "XDG_CONFIG_HOME=/root/.config")
+		args = append(args, "-v", strings.TrimSpace(p.cfg.OpencodeConfigDir)+":/root/.config/opencode:ro")
+	}
+	if strings.TrimSpace(p.cfg.OpencodeAuthFile) != "" {
+		args = append(args, "-e", "XDG_DATA_HOME=/root/.local/share")
+		args = append(args, "-v", strings.TrimSpace(p.cfg.OpencodeAuthFile)+":/root/.local/share/opencode/auth.json:ro")
 	}
 	args = append(args, image, "sh", "-lc", "sleep infinity")
 

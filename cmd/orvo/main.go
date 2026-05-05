@@ -119,6 +119,8 @@ func main() {
 		WorkingDir:          cfg.Sandbox.WorkingDir,
 		CPULimit:            cfg.Sandbox.CPULimit,
 		MemoryLimit:         cfg.Sandbox.MemoryLimit,
+		OpencodeConfigDir:   cfg.Sandbox.OpencodeConfigDir,
+		OpencodeAuthFile:    cfg.Sandbox.OpencodeAuthFile,
 		FallbackToContainer: cfg.Sandbox.FallbackToContainer,
 	})
 	if cfg.Sandbox.ImagePrepullEnabled {
