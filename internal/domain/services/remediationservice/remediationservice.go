@@ -22,6 +22,8 @@ import (
 
 const (
 	defaultNearbyErrorLimit = 20
+	retiredMinimaxFreeModel = "opencode/minimax-m2.5-free"
+	replacementFreeModel    = "opencode/mimo-v2.5-free"
 )
 
 type Service interface {
@@ -152,7 +154,7 @@ func (s *service) RunAutoResolve(ctx context.Context, input RunAutoResolveInput)
 		"--format",
 		"json",
 		"--model",
-		shellQuote(s.config.OpencodeModel),
+		shellQuote(supportedOpencodeModel(s.config.OpencodeModel)),
 	}
 	if strings.TrimSpace(s.config.OpencodeVariant) != "" {
 		opencodeArgs = append(opencodeArgs, "--variant", shellQuote(s.config.OpencodeVariant))
@@ -165,17 +167,17 @@ func (s *service) RunAutoResolve(ctx context.Context, input RunAutoResolveInput)
 	ensureOpencodeInstalledCommand := buildEnsureOpencodeInstalledCommand(s.config.OpencodeCommand)
 	blockPackageManagersCommand := buildBlockPackageManagersCommand()
 
-		commands := []string{
-			ensureOpencodeInstalledCommand,
-			blockPackageManagersCommand,
-			fmt.Sprintf(
-				"%s; if ! command -v %s >/dev/null 2>&1; then echo '%s not found in sandbox after install step'; exit 127; fi && PATH=\"$PWD/.orvo/opencode-bin:$PATH\" %s",
-				models.AutoResolveOpencodeCommandMarker,
-				shellQuote(s.config.OpencodeCommand),
-				s.config.OpencodeCommand,
-				opencodeRunCommand,
-			),
-		}
+	commands := []string{
+		ensureOpencodeInstalledCommand,
+		blockPackageManagersCommand,
+		fmt.Sprintf(
+			"%s; if ! command -v %s >/dev/null 2>&1; then echo '%s not found in sandbox after install step'; exit 127; fi && PATH=\"$PWD/.orvo/opencode-bin:$PATH\" %s",
+			models.AutoResolveOpencodeCommandMarker,
+			shellQuote(s.config.OpencodeCommand),
+			s.config.OpencodeCommand,
+			opencodeRunCommand,
+		),
+	}
 	commands = append(commands, s.config.ValidationCommands...)
 
 	job, appErr := s.sandboxJobs.CreateJob(ctx, workers.CreateSandboxJobInput{
@@ -195,6 +197,14 @@ func (s *service) RunAutoResolve(ctx context.Context, input RunAutoResolveInput)
 		return nil, appErr
 	}
 	return job, nil
+}
+
+func supportedOpencodeModel(model string) string {
+	model = strings.TrimSpace(model)
+	if strings.EqualFold(model, retiredMinimaxFreeModel) {
+		return replacementFreeModel
+	}
+	return model
 }
 
 func (s *service) buildAutoResolvePlan(ctx context.Context, organizationID string, logID string) (*autoResolvePlan, apperr.Error) {

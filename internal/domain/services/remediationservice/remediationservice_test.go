@@ -55,3 +55,12 @@ func TestNormalizeForCommitScope(t *testing.T) {
 		t.Fatalf("normalizeForCommitScope() with blank input = %q, want %q", got, "service")
 	}
 }
+
+func TestSupportedOpencodeModel(t *testing.T) {
+	if got := supportedOpencodeModel("opencode/minimax-m2.5-free"); got != "opencode/mimo-v2.5-free" {
+		t.Fatalf("supportedOpencodeModel() = %q, want %q", got, "opencode/mimo-v2.5-free")
+	}
+	if got := supportedOpencodeModel(" opencode/gpt-5.6-terra "); got != "opencode/gpt-5.6-terra" {
+		t.Fatalf("supportedOpencodeModel() = %q, want %q", got, "opencode/gpt-5.6-terra")
+	}
+}
