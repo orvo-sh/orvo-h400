@@ -63,6 +63,23 @@ jobs:
             -v "$PWD/runtime/opencode-auth/auth.json:/root/.local/share/opencode/auth.json:ro" \
             --entrypoint sh \
             orvo-opencode-sandbox:local \
-            -lc 'mkdir -p /root/.config/opencode; cp -R /opt/orvo/opencode-config/. /root/.config/opencode/; workdir="$(mktemp -d)"; cd "$workdir"; timeout 120 opencode run --format json --model opencode/mimo-v2.5-free "Reply with exactly: ORVO_MODEL_OK" >/tmp/orvo-model-smoke.json; grep -q "ORVO_MODEL_OK" /tmp/orvo-model-smoke.json'
+            -lc '
+              mkdir -p /root/.config/opencode
+              cp -R /opt/orvo/opencode-config/. /root/.config/opencode/
+              workdir="$(mktemp -d)"
+              cd "$workdir"
+              set +e
+              timeout 120 opencode run --format json --model opencode/mimo-v2.5-free "Reply with exactly: ORVO_MODEL_OK" >/tmp/orvo-model-smoke.json 2>/tmp/orvo-model-smoke.err
+              status=$?
+              set -e
+              printf "model_command_exit=%s\n" "$status"
+              if [ "$status" -ne 0 ] || ! grep -q "ORVO_MODEL_OK" /tmp/orvo-model-smoke.json; then
+                echo "model_stdout_tail"
+                tail -c 4000 /tmp/orvo-model-smoke.json
+                echo "model_stderr_tail"
+                tail -c 4000 /tmp/orvo-model-smoke.err
+                exit 1
+              fi
+            '
           echo "replacement_model_smoke=ok"
           REMOTE
