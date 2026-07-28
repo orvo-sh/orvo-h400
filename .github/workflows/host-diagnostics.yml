@@ -59,10 +59,10 @@ jobs:
             -e HOME=/root \
             -e XDG_CONFIG_HOME=/root/.config \
             -e XDG_DATA_HOME=/root/.local/share \
-            -v "$PWD/runtime/opencode:/root/.config/opencode:ro" \
+            -v "$PWD/runtime/opencode:/opt/orvo/opencode-config:ro" \
             -v "$PWD/runtime/opencode-auth/auth.json:/root/.local/share/opencode/auth.json:ro" \
             --entrypoint sh \
             orvo-opencode-sandbox:local \
-            -lc 'workdir="$(mktemp -d)"; cd "$workdir"; timeout 120 opencode run --format json --model opencode/mimo-v2.5-free "Reply with exactly: ORVO_MODEL_OK" >/tmp/orvo-model-smoke.json; grep -q "ORVO_MODEL_OK" /tmp/orvo-model-smoke.json'
+            -lc 'mkdir -p /root/.config/opencode; cp -R /opt/orvo/opencode-config/. /root/.config/opencode/; workdir="$(mktemp -d)"; cd "$workdir"; timeout 120 opencode run --format json --model opencode/mimo-v2.5-free "Reply with exactly: ORVO_MODEL_OK" >/tmp/orvo-model-smoke.json; grep -q "ORVO_MODEL_OK" /tmp/orvo-model-smoke.json'
           echo "replacement_model_smoke=ok"
           REMOTE

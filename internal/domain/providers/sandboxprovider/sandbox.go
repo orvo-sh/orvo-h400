@@ -270,6 +270,7 @@ func (p *provider) createSandboxSession(ctx context.Context, name string, image 
 
 func (p *provider) createContainerSession(ctx context.Context, name string, image string, workingDir string, cpu string, memory string) (*Session, error) {
 	args := []string{"run", "-d", "--rm", "--name", name, "-w", workingDir}
+	startupCommand := "sleep infinity"
 	if strings.TrimSpace(cpu) != "" {
 		args = append(args, "--cpus", cpu)
 	}
@@ -279,13 +280,14 @@ func (p *provider) createContainerSession(ctx context.Context, name string, imag
 	if strings.TrimSpace(p.cfg.OpencodeConfigDir) != "" {
 		args = append(args, "-e", "HOME=/root")
 		args = append(args, "-e", "XDG_CONFIG_HOME=/root/.config")
-		args = append(args, "-v", strings.TrimSpace(p.cfg.OpencodeConfigDir)+":/root/.config/opencode:ro")
+		args = append(args, "-v", strings.TrimSpace(p.cfg.OpencodeConfigDir)+":/opt/orvo/opencode-config:ro")
+		startupCommand = "mkdir -p /root/.config/opencode && cp -R /opt/orvo/opencode-config/. /root/.config/opencode/ && sleep infinity"
 	}
 	if strings.TrimSpace(p.cfg.OpencodeAuthFile) != "" {
 		args = append(args, "-e", "XDG_DATA_HOME=/root/.local/share")
 		args = append(args, "-v", strings.TrimSpace(p.cfg.OpencodeAuthFile)+":/root/.local/share/opencode/auth.json:ro")
 	}
-	args = append(args, image, "sh", "-lc", "sleep infinity")
+	args = append(args, image, "sh", "-lc", startupCommand)
 
 	cmd := exec.CommandContext(ctx, p.cfg.DockerBinary, args...)
 	output, err := cmd.CombinedOutput()
