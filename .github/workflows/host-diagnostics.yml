@@ -1,0 +1,68 @@
+name: Host Diagnostics
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Inspect production host
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_SSH_USER }}
+        run: |
+          ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/orvo-h400/app
+
+          echo "Docker services"
+          docker ps \
+            --filter "name=orvo-" \
+            --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+
+          echo "Application model configuration"
+          docker exec orvo-app sh -lc '
+            printf "configured_model=%s\n" "${SANDBOX_OPENCODE_MODEL:-<unset>}"
+            printf "configured_variant=%s\n" "${SANDBOX_OPENCODE_VARIANT:-<unset>}"
+            printf "configured_agent=%s\n" "${SANDBOX_OPENCODE_AGENT:-<unset>}"
+          '
+
+          echo "Sandbox OpenCode catalog"
+          docker run --rm --entrypoint sh orvo-opencode-sandbox:local -lc '
+            printf "opencode_version="
+            opencode --version
+            opencode models opencode | grep -E "^opencode/(mimo-v2.5-free|minimax-m2.5-free)$" || true
+          '
+
+          echo "Recent PostgreSQL auto-resolve jobs"
+          docker exec orvo-postgres sh -lc '
+            psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+              -c "SELECT id, state, runtime_type, LEFT(REPLACE(error, E'\''\n'\'', '\'' '\''), 180) AS error, created_at, finished_at FROM sandbox_jobs WHERE mode = '\''auto_resolve'\'' ORDER BY created_at DESC LIMIT 10"
+          '
+
+          echo "Authenticated replacement-model smoke test"
+          docker run --rm \
+            -e HOME=/root \
+            -e XDG_CONFIG_HOME=/root/.config \
+            -e XDG_DATA_HOME=/root/.local/share \
+            -v "$PWD/runtime/opencode:/root/.config/opencode:ro" \
+            -v "$PWD/runtime/opencode-auth/auth.json:/root/.local/share/opencode/auth.json:ro" \
+            --entrypoint sh \
+            orvo-opencode-sandbox:local \
+            -lc 'workdir="$(mktemp -d)"; cd "$workdir"; timeout 120 opencode run --format json --model opencode/mimo-v2.5-free "Reply with exactly: ORVO_MODEL_OK" >/tmp/orvo-model-smoke.json; grep -q "ORVO_MODEL_OK" /tmp/orvo-model-smoke.json'
+          echo "replacement_model_smoke=ok"
+          REMOTE
